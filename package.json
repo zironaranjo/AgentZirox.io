@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
+    "@types/express": "^5.0.6",
     "@types/node": "^20.17.0",
     "@types/nodemailer": "^6.4.14",
     "tsup": "^8.3.0",
