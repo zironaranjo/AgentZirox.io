@@ -4,7 +4,7 @@
   "description": "AgenteZirox.io — Personal AI Agent with Telegram, Email, API & MCP",
   "type": "module",
   "engines": {
-    "node": ">=20.9.0"
+    "node": "20.x"
   },
   "scripts": {
     "dev": "node server.js",
