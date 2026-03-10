@@ -48,15 +48,15 @@ export async function readInbox(limit = 10): Promise<EmailMessage[]> {
             })) {
                 const envelope = msg.envelope;
                 try {
-                    const source = msg.source.toString('utf-8');
+                    const source = msg.source?.toString('utf-8') ?? '';
                     // Extract plain text body (basic extraction)
                     const bodyMatch = source.match(/\r\n\r\n([\s\S]+?)(\r\n--|\s*$)/);
                     const body = bodyMatch ? bodyMatch[1].trim() : '(no body)';
                     messages.push({
                         uid: msg.uid,
-                        subject: envelope.subject ?? '(no subject)',
-                        from: envelope.from?.[0]?.address ?? 'unknown',
-                        date: envelope.date?.toISOString() ?? '',
+                        subject: envelope?.subject ?? '(no subject)',
+                        from: envelope?.from?.[0]?.address ?? 'unknown',
+                        date: envelope?.date?.toISOString() ?? '',
                         body: body.substring(0, 500),
                     });
                 } catch {

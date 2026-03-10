@@ -31,4 +31,4 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 # Comando para encender a Ziro (Bot + Next.js)
-CMD ["node", "server.js"]
+CMD ["npx", "tsx", "server.ts"]

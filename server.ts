@@ -3,10 +3,10 @@ import { parse } from "url";
 import next from "next";
 
 // Import your custom systems
-import './src/core/logger.js';
-import { logger } from './src/core/logger.js';
-import { initMemory } from './src/core/memory.js';
-import { startTelegramBot } from './src/integrations/telegram/bot.js';
+import './src/core/logger';
+import { logger } from './src/core/logger';
+import { initMemory } from './src/core/memory';
+import { startTelegramBot } from './src/integrations/telegram/bot';
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";

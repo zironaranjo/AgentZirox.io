@@ -70,9 +70,9 @@ export async function callLLM(
 async function callGroq(messages: ChatMessage[], tools?: LLMTool[]): Promise<LLMResponse> {
     const model = process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile';
 
-    const params: Groq.Chat.CompletionCreateParamsNonStreaming = {
+    const params: any = {
         model,
-        messages: messages as Groq.Chat.ChatCompletionMessageParam[],
+        messages: messages as any,
         temperature: 0.7,
         max_tokens: 2048,
     };
