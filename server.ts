@@ -9,7 +9,7 @@ import { initMemory } from './src/core/memory';
 import { startTelegramBot } from './src/integrations/telegram/bot';
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = "localhost";
+const hostname = "0.0.0.0";
 const port = parseInt(process.env.PORT || "3000", 10);
 
 const app = next({ dev, hostname, port });
