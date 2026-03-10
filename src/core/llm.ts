@@ -21,18 +21,31 @@ export interface LLMResponse {
     }>;
 }
 
-// ── Groq client ──────────────────────────────────────────────────────────────
-const groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// ── Lazy clients — created on first use so missing keys don't crash startup ──
+let _groqClient: Groq | null = null;
+let _openRouterClient: OpenAI | null = null;
 
-// ── OpenRouter client (OpenAI-compatible) ────────────────────────────────────
-const openRouterClient = new OpenAI({
-    apiKey: process.env.OPENROUTER_API_KEY,
-    baseURL: 'https://openrouter.ai/api/v1',
-    defaultHeaders: {
-        'HTTP-Referer': 'https://agentezirox.io',
-        'X-Title': 'AgenteZirox',
-    },
-});
+function getGroqClient(): Groq {
+    if (!_groqClient) {
+        _groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY ?? '' });
+    }
+    return _groqClient;
+}
+
+function getOpenRouterClient(): OpenAI {
+    if (!_openRouterClient) {
+        _openRouterClient = new OpenAI({
+            apiKey: process.env.OPENROUTER_API_KEY ?? '',
+            baseURL: 'https://openrouter.ai/api/v1',
+            defaultHeaders: {
+                'HTTP-Referer': 'https://agentezirox.io',
+                'X-Title': 'AgenteZirox',
+            },
+        });
+    }
+    return _openRouterClient;
+}
+
 
 type Provider = 'groq' | 'openrouter';
 
@@ -89,7 +102,7 @@ async function callGroq(messages: ChatMessage[], tools?: LLMTool[]): Promise<LLM
         params.tool_choice = 'auto';
     }
 
-    const res = await groqClient.chat.completions.create(params);
+    const res = await getGroqClient().chat.completions.create(params);
     const choice = res.choices[0];
     const msg = choice.message;
 
@@ -127,7 +140,7 @@ async function callOpenRouter(messages: ChatMessage[], tools?: LLMTool[]): Promi
         params.tool_choice = 'auto';
     }
 
-    const res = await openRouterClient.chat.completions.create(params);
+    const res = await getOpenRouterClient().chat.completions.create(params);
     const choice = res.choices[0];
     const msg = choice.message;
 
