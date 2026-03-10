@@ -19,7 +19,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Simple API endpoint to handle chat from the web interface
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', async (req: express.Request, res: express.Response) => {
     try {
         const userMessage = req.body.message;
         // Mock response so the user can test the chat interface right away.
