@@ -1,0 +1,31 @@
+{
+  "name": "agentezirox",
+  "version": "1.0.0",
+  "description": "AgenteZirox.io — Personal AI Agent with Telegram, Email, API & MCP",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsup src/index.ts --format esm --dts",
+    "mcp": "tsx src/mcp/server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.5.0",
+    "better-sqlite3": "^11.0.0",
+    "dotenv": "^16.4.5",
+    "grammy": "^1.30.0",
+    "groq-sdk": "^0.8.0",
+    "imapflow": "^1.0.169",
+    "nodemailer": "^6.9.14",
+    "openai": "^4.73.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.17.0",
+    "@types/nodemailer": "^6.4.14",
+    "tsup": "^8.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
