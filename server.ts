@@ -21,22 +21,18 @@ const AGENT_VERSION = process.env.AGENT_VERSION ?? '1.0.0';
 app.prepare().then(async () => {
   logger.info(`🤖 ${AGENT_NAME} v${AGENT_VERSION} starting Next.js Monolith...`);
 
-  // 1. Initialize custom backend systems
+  // 1. Initialize memory first (fast, synchronous-like)
   try {
     await initMemory();
     logger.info('✅ Persistent Memory initialized');
-
-    await startTelegramBot();
-    logger.info('✅ Telegram bot started — @AgentZiroxio_bot');
   } catch (error) {
-    logger.error('❌ Failed to initialize background services:', error);
+    logger.error('❌ Memory init failed:', error);
   }
 
-  // 2. Start the web server
+  // 2. Start web server IMMEDIATELY — don't wait for bot
   createServer(async (req, res) => {
     try {
       if (!req.url) return;
-      
       const parsedUrl = parse(req.url, true);
       await handle(req, res, parsedUrl);
     } catch (err) {
@@ -50,6 +46,12 @@ app.prepare().then(async () => {
       process.exit(1);
     })
     .listen(port, () => {
-      logger.info(`🚀 Next.js + Bot is online at http://${hostname}:${port}`);
+      logger.info(`🚀 Next.js is online at http://${hostname}:${port}`);
+
+      // 3. Start Telegram bot IN BACKGROUND (fire-and-forget)
+      // bot.start() is infinite polling — never awaited so it doesn't block
+      startTelegramBot()
+        .then(() => logger.info('✅ Telegram bot started'))
+        .catch((err) => logger.error('❌ Telegram bot failed:', err));
     });
 });
