@@ -1,34 +1,46 @@
 FROM node:20-bullseye-slim
 
-# Directorio de trabajo en el contenedor
 WORKDIR /app
 
-# Instalamos las herramientas del sistema operativo necesarias para que
-# los paquetes en C++ como better-sqlite3 puedan compilar si lo necesitan (node-gyp)
+# herramientas de compilación para better-sqlite3
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiamos las dependencias primero para aprovechar el caché de Docker
+# dependencias
 COPY package.json package-lock.json ./
-
-# Instalamos todas las dependencias
 RUN npm ci
 
-# Copiamos todo el resto del código del proyecto
+# código fuente
 COPY . .
 
-# Construimos la interfaz web (Next.js)
+# Paso 1: compilar Next.js (genera .next/)
 RUN npm run build
 
-# Exponemos el puerto en el que vivirá nuestro Custom Server
-EXPOSE 3000
+# Paso 2: compilar server.ts + todo src/ con tsup en formato ESM
+RUN npx tsup \
+    server.ts \
+    src/core/logger.ts \
+    src/core/memory.ts \
+    src/core/agent.ts \
+    src/core/llm.ts \
+    src/core/dispatcher.ts \
+    src/integrations/telegram/bot.ts \
+    src/tools/index.ts \
+    src/tools/call-api.ts \
+    src/tools/clear-memory.ts \
+    src/tools/list-tools.ts \
+    src/tools/read-inbox.ts \
+    src/tools/search-memory.ts \
+    src/tools/send-email.ts \
+    src/tools/set-provider.ts \
+    --format esm --out-dir dist-server --no-dts
 
-# Variables de entorno
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Comando para encender a Ziro (Bot + Next.js)
-CMD ["npx", "tsx", "server.ts"]
+EXPOSE 3000
+
+CMD ["node", "dist-server/server.js"]
