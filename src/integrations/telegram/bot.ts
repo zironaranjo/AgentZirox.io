@@ -19,6 +19,7 @@ export async function startTelegramBot() {
             `• 📧 Enviar emails\n` +
             `• 🌐 Llamar cualquier API\n` +
             `• 🔌 Integrar servicios via MCP\n` +
+            `• 🎙️ Transcribir notas de voz\n` +
             `• 💾 Recordar conversaciones anteriores\n\n` +
             `Solo escríbeme lo que necesitas!\n\n` +
             `Comandos:\n` +
@@ -106,6 +107,40 @@ export async function startTelegramBot() {
         }
     });
 
+    // ── Voice message handler ────────────────────────────────────────────────
+    bot.on('message:voice', async (ctx) => {
+        const chatId = String(ctx.chat.id);
+        await ctx.replyWithChatAction('typing');
+
+        try {
+            await ctx.reply('🎙️ Recibido. Estoy transcribiendo tu nota de voz...');
+            const transcription = await transcribeTelegramFile(ctx, ctx.message.voice.file_id);
+            const response = await processMessage(chatId, transcription);
+            await sendLongReply(ctx, response);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.error('Telegram voice handler error:', msg);
+            await ctx.reply(`❌ Error procesando audio: ${msg}`);
+        }
+    });
+
+    // ── Audio file handler ───────────────────────────────────────────────────
+    bot.on('message:audio', async (ctx) => {
+        const chatId = String(ctx.chat.id);
+        await ctx.replyWithChatAction('typing');
+
+        try {
+            await ctx.reply('🎧 Recibido. Estoy transcribiendo el audio...');
+            const transcription = await transcribeTelegramFile(ctx, ctx.message.audio.file_id);
+            const response = await processMessage(chatId, transcription);
+            await sendLongReply(ctx, response);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.error('Telegram audio handler error:', msg);
+            await ctx.reply(`❌ Error procesando audio: ${msg}`);
+        }
+    });
+
     // ── Error handler ─────────────────────────────────────────────────────────
     bot.catch((err) => {
         logger.error('Bot error:', err.message);
@@ -115,4 +150,64 @@ export async function startTelegramBot() {
     await bot.start({
         onStart: () => logger.info('🤖 Telegram bot is polling...'),
     });
+}
+
+async function sendLongReply(ctx: Context, response: string) {
+    if (response.length <= 4096) {
+        await ctx.reply(response, { parse_mode: 'Markdown' });
+        return;
+    }
+
+    const chunks = response.match(/.{1,4000}/gs) ?? [response];
+    for (const chunk of chunks) {
+        await ctx.reply(chunk, { parse_mode: 'Markdown' });
+    }
+}
+
+async function transcribeTelegramFile(ctx: Context, fileId: string): Promise<string> {
+    const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
+    const groqApiKey = process.env.GROQ_API_KEY;
+
+    if (!telegramToken) throw new Error('TELEGRAM_BOT_TOKEN no configurado');
+    if (!groqApiKey) {
+        throw new Error('GROQ_API_KEY no configurado para transcribir audio');
+    }
+
+    const telegramFile = await ctx.api.getFile(fileId);
+    if (!telegramFile.file_path) {
+        throw new Error('No se pudo obtener la ruta del archivo de Telegram');
+    }
+
+    const telegramFileUrl = `https://api.telegram.org/file/bot${telegramToken}/${telegramFile.file_path}`;
+    const telegramRes = await fetch(telegramFileUrl);
+    if (!telegramRes.ok) {
+        throw new Error(`No se pudo descargar el audio de Telegram (${telegramRes.status})`);
+    }
+
+    const audioBuffer = await telegramRes.arrayBuffer();
+    const audioBlob = new Blob([audioBuffer], { type: 'audio/ogg' });
+
+    const form = new FormData();
+    form.append('model', process.env.GROQ_TRANSCRIPTION_MODEL ?? 'whisper-large-v3-turbo');
+    form.append('language', 'es');
+    form.append('response_format', 'text');
+    form.append('file', audioBlob, 'telegram-audio.ogg');
+
+    const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${groqApiKey}`,
+        },
+        body: form,
+    });
+
+    if (!groqRes.ok) {
+        const errText = await groqRes.text();
+        throw new Error(`Fallo de transcripcion (${groqRes.status}): ${errText}`);
+    }
+
+    const text = (await groqRes.text()).trim();
+    if (!text) throw new Error('No se pudo transcribir el audio');
+
+    return `[Transcripcion de audio]\n${text}`;
 }
