@@ -98,6 +98,13 @@ export async function startTelegramBot() {
             return;
         }
 
+        if (isAudioCapabilityQuestion(userText)) {
+            await ctx.reply(
+                '✅ Si, puedo entender tus audios en Telegram. Los transcribo automaticamente y luego te ayudo con resumenes, tareas o guardado de ideas.'
+            );
+            return;
+        }
+
         // Show typing indicator
         await ctx.replyWithChatAction('typing');
 
@@ -236,5 +243,15 @@ function isReadLastAudioRequest(text: string): boolean {
         normalized === 'leer la transcripcion' ||
         normalized === 'muestra la transcripcion' ||
         normalized === 'repite la transcripcion'
+    );
+}
+
+function isAudioCapabilityQuestion(text: string): boolean {
+    const normalized = text.trim().toLowerCase();
+    return (
+        normalized.includes('puedes leer') && normalized.includes('audio') ||
+        normalized.includes('entiendes') && normalized.includes('audio') ||
+        normalized.includes('puedes escuchar') && normalized.includes('audio') ||
+        normalized.includes('puedes procesar') && normalized.includes('audio')
     );
 }
