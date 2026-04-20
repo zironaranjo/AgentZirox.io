@@ -12,3 +12,4 @@ import './list-files.js';
 import './append-file.js';
 import './read-file.js';
 import './create-client-workspace.js';
+import './capture-note.js';

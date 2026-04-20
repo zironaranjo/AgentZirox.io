@@ -54,6 +54,7 @@ npm run dev
 | `read_file` | Leer briefs, tareas y notas guardadas del workspace |
 | `list_files` | Listar carpetas y archivos del workspace seguro |
 | `create_client_workspace` | Crear estructura base de cliente con plantillas |
+| `capture_note` | Captura rapida de ideas/notas en `capturas/*.md` con fecha |
 
 ## Workspace operativo (clientes y redes)
 
@@ -64,6 +65,7 @@ WORKSPACE_BASE_DIR=/opt/zirox-workspace
 ```
 
 Todas las tools de archivos (`create_folder`, `write_file`, `list_files`) quedan restringidas a esa ruta base para evitar accesos fuera del workspace.
+Para captura rapida de ideas, el agente puede usar `capture_note` y guardar en `capturas/ideas.md`.
 
 Si usas OpenRouter con un modelo que no soporta tools (por ejemplo algunos endpoints de Hermes), puedes separar modelo de chat y modelo para herramientas:
 
