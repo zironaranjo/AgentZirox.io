@@ -50,7 +50,10 @@ npm run dev
 | `set_provider` | Cambiar proveedor LLM en tiempo real |
 | `create_folder` | Crear carpetas dentro del workspace seguro del VPS |
 | `write_file` | Crear/editar archivos de trabajo de clientes y contenidos |
+| `append_file` | Agregar seguimiento/tareas sin sobrescribir archivos |
+| `read_file` | Leer briefs, tareas y notas guardadas del workspace |
 | `list_files` | Listar carpetas y archivos del workspace seguro |
+| `create_client_workspace` | Crear estructura base de cliente con plantillas |
 
 ## Workspace operativo (clientes y redes)
 

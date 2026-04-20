@@ -9,3 +9,6 @@ import './set-provider.js';
 import './create-folder.js';
 import './write-file.js';
 import './list-files.js';
+import './append-file.js';
+import './read-file.js';
+import './create-client-workspace.js';
