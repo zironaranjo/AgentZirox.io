@@ -6,3 +6,6 @@ import './search-memory.js';
 import './clear-memory.js';
 import './list-tools.js';
 import './set-provider.js';
+import './create-folder.js';
+import './write-file.js';
+import './list-files.js';

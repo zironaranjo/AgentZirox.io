@@ -24,6 +24,7 @@ export interface LLMResponse {
 // ── Lazy clients — created on first use so missing keys don't crash startup ──
 let _groqClient: Groq | null = null;
 let _openRouterClient: OpenAI | null = null;
+let _hermesClient: OpenAI | null = null;
 
 function getGroqClient(): Groq {
     if (!_groqClient) {
@@ -46,11 +47,22 @@ function getOpenRouterClient(): OpenAI {
     return _openRouterClient;
 }
 
+function getHermesClient(): OpenAI {
+    if (!_hermesClient) {
+        _hermesClient = new OpenAI({
+            apiKey: process.env.HERMES_API_KEY ?? '',
+            baseURL: process.env.HERMES_BASE_URL ?? 'http://localhost:11434/v1',
+        });
+    }
+    return _hermesClient;
+}
 
-type Provider = 'groq' | 'openrouter';
+
+type Provider = 'groq' | 'openrouter' | 'hermes';
 
 function getProvider(): Provider {
     const p = (process.env.LLM_PROVIDER ?? 'groq').toLowerCase();
+    if (p === 'hermes') return 'hermes';
     if (p === 'openrouter') return 'openrouter';
     return 'groq';
 }
@@ -75,6 +87,8 @@ export async function callLLM(
 
     if (provider === 'groq') {
         return callGroq(fullMessages, tools);
+    } else if (provider === 'hermes') {
+        return callHermes(fullMessages, tools);
     } else {
         return callOpenRouter(fullMessages, tools);
     }
@@ -119,7 +133,10 @@ async function callGroq(messages: ChatMessage[], tools?: LLMTool[]): Promise<LLM
 }
 
 async function callOpenRouter(messages: ChatMessage[], tools?: LLMTool[]): Promise<LLMResponse> {
-    const model = process.env.OPENROUTER_MODEL ?? 'anthropic/claude-3.5-sonnet';
+    const hasTools = Boolean(tools && tools.length > 0);
+    const chatModel = process.env.OPENROUTER_MODEL ?? 'anthropic/claude-3.5-sonnet';
+    const toolsModel = process.env.OPENROUTER_TOOLS_MODEL ?? chatModel;
+    const model = hasTools ? toolsModel : chatModel;
 
     const params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
         model,
@@ -140,7 +157,55 @@ async function callOpenRouter(messages: ChatMessage[], tools?: LLMTool[]): Promi
         params.tool_choice = 'auto';
     }
 
-    const res = await getOpenRouterClient().chat.completions.create(params);
+    try {
+        const res = await getOpenRouterClient().chat.completions.create(params);
+        const choice = res.choices[0];
+        const msg = choice.message;
+
+        const toolCalls = msg.tool_calls?.map((tc) => ({
+            id: tc.id,
+            name: tc.function.name,
+            arguments: JSON.parse(tc.function.arguments || '{}') as Record<string, unknown>,
+        }));
+
+        return {
+            content: msg.content ?? '',
+            toolCalls,
+        };
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('No endpoints found that support tool use')) {
+            throw new Error(
+                `El modelo "${model}" no soporta tools en OpenRouter. Configura OPENROUTER_TOOLS_MODEL con uno compatible (ej: anthropic/claude-3.5-sonnet).`
+            );
+        }
+        throw err;
+    }
+}
+
+async function callHermes(messages: ChatMessage[], tools?: LLMTool[]): Promise<LLMResponse> {
+    const model = process.env.HERMES_MODEL ?? 'hermes-3-llama-3.1-70b';
+
+    const params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
+        model,
+        messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
+        temperature: 0.7,
+        max_tokens: 2048,
+    };
+
+    if (tools && tools.length > 0) {
+        params.tools = tools.map((t) => ({
+            type: 'function' as const,
+            function: {
+                name: t.name,
+                description: t.description,
+                parameters: t.parameters,
+            },
+        }));
+        params.tool_choice = 'auto';
+    }
+
+    const res = await getHermesClient().chat.completions.create(params);
     const choice = res.choices[0];
     const msg = choice.message;
 

@@ -6,7 +6,7 @@ Un agente de IA personal, extensible y modular. Se comunica via **Telegram**, pu
 
 | | |
 |---|---|
-| **LLM** | Groq (Llama 3.3 70B) + OpenRouter (Claude, etc.) |
+| **LLM** | Groq (Llama 3.3 70B) + OpenRouter (Claude, etc.) + Hermes (endpoint compatible OpenAI) |
 | **Telegram** | grammy |
 | **Email** | nodemailer (SMTP) + imapflow (IMAP) |
 | **MCP** | @modelcontextprotocol/sdk |
@@ -35,7 +35,7 @@ npm run dev
 | `/reset` | Borrar historial de conversación |
 | `/status` | Estado del agente y modelo activo |
 | `/tools` | Ver herramientas disponibles |
-| `/provider groq\|openrouter` | Cambiar proveedor LLM |
+| `/provider groq\|openrouter\|hermes` | Cambiar proveedor LLM |
 
 ## Herramientas del agente
 
@@ -48,6 +48,27 @@ npm run dev
 | `clear_memory` | Borrar historial de un chat |
 | `list_tools` | Listar herramientas disponibles |
 | `set_provider` | Cambiar proveedor LLM en tiempo real |
+| `create_folder` | Crear carpetas dentro del workspace seguro del VPS |
+| `write_file` | Crear/editar archivos de trabajo de clientes y contenidos |
+| `list_files` | Listar carpetas y archivos del workspace seguro |
+
+## Workspace operativo (clientes y redes)
+
+Define en `.env`:
+
+```env
+WORKSPACE_BASE_DIR=/opt/zirox-workspace
+```
+
+Todas las tools de archivos (`create_folder`, `write_file`, `list_files`) quedan restringidas a esa ruta base para evitar accesos fuera del workspace.
+
+Si usas OpenRouter con un modelo que no soporta tools (por ejemplo algunos endpoints de Hermes), puedes separar modelo de chat y modelo para herramientas:
+
+```env
+LLM_PROVIDER=openrouter
+OPENROUTER_MODEL=nousresearch/hermes-3-llama-3.1-70b
+OPENROUTER_TOOLS_MODEL=anthropic/claude-3.5-sonnet
+```
 
 ## MCP Server
 

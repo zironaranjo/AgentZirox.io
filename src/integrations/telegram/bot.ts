@@ -42,11 +42,17 @@ export async function startTelegramBot() {
         const provider = process.env.LLM_PROVIDER ?? 'groq';
         const model = provider === 'groq'
             ? (process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile')
-            : (process.env.OPENROUTER_MODEL ?? 'anthropic/claude-3.5-sonnet');
+            : provider === 'hermes'
+                ? (process.env.HERMES_MODEL ?? 'hermes-3-llama-3.1-70b')
+                : (process.env.OPENROUTER_MODEL ?? 'anthropic/claude-3.5-sonnet');
+        const toolsModel = provider === 'openrouter'
+            ? (process.env.OPENROUTER_TOOLS_MODEL ?? process.env.OPENROUTER_MODEL ?? 'anthropic/claude-3.5-sonnet')
+            : null;
         await ctx.reply(
             `🟢 **AgenteZirox** — Online\n` +
             `🧠 Proveedor: \`${provider}\`\n` +
             `📦 Modelo: \`${model}\`\n` +
+            (toolsModel ? `🛠️ Modelo tools: \`${toolsModel}\`\n` : '') +
             `🔧 Herramientas: ${listTools().length}`,
             { parse_mode: 'Markdown' }
         );
