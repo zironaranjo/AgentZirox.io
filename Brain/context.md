@@ -1,6 +1,6 @@
 # 🧠 Ziro - System Architecture & Context
 
-> Última actualización: 10 de Marzo 2026
+> Última actualización: 20 de Abril 2026
 
 ## 1. Project Overview
 **Ziro** es un Agente de IA Personal que opera simultáneamente como:
@@ -27,7 +27,7 @@ server.ts (Bootloader)
     ├── initMemory()          → SQLite DB en ./data/
     ├── startTelegramBot()    → Polling infinito en background (fire-and-forget)
     └── next.js HTTP Server   → Escucha en 0.0.0.0:3000
-            └── /api/chat     → Respuesta mock (pendiente conectar LLM)
+            └── /api/chat     → Endpoint web de chat (pendiente pulir parity total con Telegram)
             └── / (page.tsx)  → Interfaz web del chat
 ```
 
@@ -46,7 +46,7 @@ server.ts (Bootloader)
 | **Backend Custom Server** | TypeScript → compilado con tsup → `node dist-server/server.js` |
 | **Bot Telegram** | grammY (long polling, fire-and-forget) |
 | **Memoria** | better-sqlite3 (SQLite) |
-| **LLM** | Groq (por defecto) / OpenRouter (opcional) |
+| **LLM** | Groq / OpenRouter / Hermes (endpoint OpenAI-compatible) |
 | **Deployment** | Dokploy + Dockerfile custom en VPS |
 | **Build** | Dockerfile con Node 20-bullseye-slim |
 | **CI/CD** | Push a `main` → Deploy manual en Dokploy |
@@ -90,16 +90,21 @@ AgentZirox.io/
 | `NODE_ENV` | ✅ | `production` |
 | `TELEGRAM_BOT_TOKEN` | ✅ | Token BotFather |
 | `GROQ_API_KEY` | ✅ | API Key de console.groq.com |
-| `LLM_PROVIDER` | ⚡ | `groq` o `openrouter` (default: groq) |
+| `LLM_PROVIDER` | ⚡ | `groq` / `openrouter` / `hermes` |
 | `GROQ_MODEL` | ⚡ | default: `llama-3.3-70b-versatile` |
+| `GROQ_TRANSCRIPTION_MODEL` | 🔵 | Modelo Whisper para voz en Telegram |
 | `AGENT_NAME` | ⚡ | `Ziro` |
 | `AGENT_VERSION` | ⚡ | `1.0.0` |
 | `OPENROUTER_API_KEY` | 🔵 | Solo si usas OpenRouter |
+| `OPENROUTER_MODEL` | 🔵 | Modelo principal de chat |
+| `OPENROUTER_TOOLS_MODEL` | 🔵 | Modelo compatible con tool-calling |
+| `HERMES_BASE_URL` / `HERMES_API_KEY` / `HERMES_MODEL` | 🔵 | Solo si usas provider `hermes` |
 | `SMTP_*` / `IMAP_*` | 🔵 | Solo si usas integración de email |
+| `WORKSPACE_BASE_DIR` | ✅ | Sandbox de archivos del agente en VPS |
 
 ---
 
-## 6. Estado Actual ✅ (Marzo 2026)
+## 6. Estado Actual ✅ (Abril 2026)
 - [x] VPS limpiado (se liberaron ~50GB de Docker artifacts)
 - [x] Subdominio `ziro.zirox.io` configurado con DNS + SSL
 - [x] Aplicación desplegada en Dokploy con Dockerfile propio
@@ -108,10 +113,18 @@ AgentZirox.io/
 - [x] Variables de entorno configuradas en Dokploy
 - [x] Arquitectura migrada de Express a Next.js 16 Monolito
 - [x] Problema del "Bad Gateway" resuelto (bot fire-and-forget + 0.0.0.0 binding)
+- [x] Proveedor OpenRouter con modelo Hermes operativo en producción
+- [x] Routing híbrido OpenRouter: modelo chat + modelo tools separado
+- [x] Workspace seguro para operaciones de archivos en VPS
+- [x] Tools de operaciones: `create_folder`, `write_file`, `append_file`, `read_file`, `list_files`
+- [x] Plantilla rápida por cliente: `create_client_workspace`
+- [x] Captura rápida de ideas: `capture_note` (ej: "anota esto...")
+- [x] Soporte de mensajes de voz/audio de Telegram con transcripción automática
 
 ## 7. Próximos Pasos / Roadmap
-- [ ] **Conectar Web Chat al LLM real** — Modificar `/api/chat/route.ts` para llamar a `callLLM()` de `src/core/llm.ts` y devolver respuestas reales de Groq
-- [ ] **Memoria compartida Web+Telegram** — Mismo `chatId` para que Ziro recuerde en ambas interfaces
-- [ ] **Auth** — Añadir Clerk o NextAuth para proteger el dashboard con login
-- [ ] **Dashboard de Admin** — Panel para ver conversaciones, cambiar configuración en vivo
-- [ ] **Escalar a SaaS** — Multi-usuario, planes de pago, sub-agentes personalizados
+- [ ] **Paridad completa Web Chat vs Telegram** — asegurar que web use exactamente el mismo loop de tools y memoria
+- [ ] **Integración Google Drive + Gmail API** — guardar correos importantes en carpetas por cliente
+- [ ] **Canales adicionales** — Instagram/WhatsApp como bandeja de entrada de notas/tareas
+- [ ] **Auth** — Añadir Clerk o NextAuth para proteger dashboard
+- [ ] **Dashboard de Admin** — panel de conversaciones, jobs y configuración de tools
+- [ ] **Escalar a SaaS** — multiusuario, planes de pago, subagentes por rol

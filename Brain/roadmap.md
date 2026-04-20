@@ -1,7 +1,7 @@
 # 🗺️ Ziro — Roadmap hacia un Agente Profesional
 
-> Estado actual: MVP desplegado en `ziro.zirox.io` ✅  
-> Objetivo: Agente de IA personal autónomo, escalable y listo para SaaS
+> Estado actual: Agente operativo en Telegram + Web, con workspace seguro y voz ✅  
+> Objetivo: Sistema autónomo para productividad, clientes y operaciones de contenido
 
 ---
 
@@ -14,20 +14,24 @@
 - [x] Bot de Telegram activo
 - [x] Memoria persistente con SQLite
 - [x] Arquitectura Monolito (Bot + Web en un solo proceso)
+- [x] Routing OpenRouter híbrido (chat model + tools model)
+- [x] Workspace seguro en VPS (`WORKSPACE_BASE_DIR`)
+- [x] Tools de archivos para operaciones de clientes
+- [x] Captura rápida de ideas (`capture_note`)
+- [x] Soporte de notas de voz/audio Telegram con transcripción
 
 ### 🔲 Pendiente
-- [ ] **Conectar Web Chat al LLM real**  
-  Modificar `/api/chat/route.ts` para llamar a `callLLM()` de `src/core/llm.ts`.  
-  El chat web ahora mismo responde con texto de prueba.
+- [ ] **Paridad completa Web + Telegram**  
+  Asegurar que la web usa exactamente el mismo flujo de tools, memoria y respuestas que Telegram.
 
 - [ ] **Memoria compartida Web + Telegram**  
-  Usar el mismo `chatId` del usuario en ambas interfaces para que Ziro recuerde la conversación independientemente de por dónde hables.
+  Unificar identidad de sesión para continuidad entre dispositivos/canales.
 
 - [ ] **Historial de chat visible en la web**  
-  Cargar el historial de conversaciones desde SQLite al cargar la página web.
+  Cargar y navegar historial desde SQLite con UX tipo inbox.
 
 - [ ] **Streaming de respuestas**  
-  Mostrar las letras de Groq/OpenRouter en tiempo real (efecto de escritura) en vez de esperar a que llegue el texto completo.
+  Respuestas en tiempo real en UI web para reducir latencia percibida.
 
 ---
 
@@ -54,13 +58,18 @@
 - [ ] **Recordatorios y tareas**  
   Sistema de tareas pendientes con notificaciones vía Telegram.
 
-- [ ] **Notas y knowledge base personal**  
-  Ziro guarda notas que tú le dictas y las recuerda para siempre.
+- [ ] **Knowledge base personal persistente**  
+  Consolidar capturas (`capturas/*.md`) con búsqueda semántica y etiquetas automáticas.
 
 - [ ] **Integración con Notion/Obsidian**  
   Crear y editar páginas de Notion o notas de Obsidian directamente desde el chat.
 
 ### 🌐 Skills de Integración
+- [ ] **Google Drive + Gmail API**  
+  Crear carpetas por cliente y archivar correos importantes automáticamente.
+
+- [ ] **Instagram DM Inbox**  
+  Captura de ideas/tareas desde Instagram y sincronización al workspace.
 - [ ] **Webhooks entrantes**  
   Recibir eventos de servicios externos (GitHub, Stripe, cualquier API) y procesarlos con IA.
 
@@ -84,8 +93,8 @@
 - [ ] **Panel de configuración**  
   Cambiar el modelo LLM, prompt del sistema, herramientas activas, desde la UI sin tocar código.
 
-- [ ] **Modo voz**  
-  Hablar con Ziro por micrófono (Whisper para transcripción) y escuchar respuestas (ElevenLabs TTS).
+- [ ] **Modo voz web (input + output)**  
+  Captura por micrófono en web y respuesta con TTS opcional.
 
 - [ ] **Notificaciones proactivas**  
   Ziro puede enviarte mensajes sin que tú preguntes (alertas, resúmenes diarios, etc.)
@@ -116,14 +125,13 @@
 
 | Tarea | Impacto | Esfuerzo | Prioridad |
 |---|---|---|---|
-| Conectar web chat al LLM | 🔥🔥🔥 | ⚡ Bajo | ⭐⭐⭐⭐⭐ |
-| Streaming de respuestas | 🔥🔥🔥 | ⚡ Bajo | ⭐⭐⭐⭐⭐ |
+| Paridad Web + Telegram | 🔥🔥🔥 | ⚡ Bajo | ⭐⭐⭐⭐⭐ |
+| Streaming de respuestas web | 🔥🔥🔥 | ⚡ Bajo | ⭐⭐⭐⭐⭐ |
+| Google Drive + Gmail API | 🔥🔥🔥 | 🔨 Medio | ⭐⭐⭐⭐ |
 | Historial web | 🔥🔥 | ⚡ Bajo | ⭐⭐⭐⭐ |
-| Búsqueda en internet | 🔥🔥🔥 | ⚡ Medio | ⭐⭐⭐⭐ |
-| Modo voz | 🔥🔥🔥 | 🔨 Medio | ⭐⭐⭐ |
-| Google Calendar | 🔥🔥 | 🔨 Medio | ⭐⭐⭐ |
+| Instagram inbox | 🔥🔥🔥 | 🏗️ Alto | ⭐⭐⭐ |
+| Knowledge base semántica | 🔥🔥🔥 | 🏗️ Alto | ⭐⭐⭐ |
 | Autenticación | 🔥🔥 | 🔨 Medio | ⭐⭐⭐ |
-| Memoria semántica RAG | 🔥🔥🔥 | 🏗️ Alto | ⭐⭐⭐ |
 | Multi-tenancy SaaS | 🔥🔥🔥 | 🏗️ Alto | ⭐⭐ |
 | Stripe pagos | 🔥🔥🔥 | 🏗️ Alto | ⭐⭐ |
 
@@ -132,10 +140,10 @@
 ## 🚀 Recomendación: Por dónde empezar mañana
 
 ```
-1️⃣  Conectar web chat → Groq (30 min)
-2️⃣  Streaming de respuestas (1 hora)
-3️⃣  Búsqueda en internet con Tavily (2 horas)
-4️⃣  Historial en web (1 hora)
+1️⃣  Paridad Web + Telegram (mismo pipeline de tools)  
+2️⃣  Streaming de respuestas en web  
+3️⃣  Integración Drive + Gmail API para archivo automático de correos  
+4️⃣  Vista de historial y capturas en dashboard
 ```
 
 Con esos 4 pasos, Ziro pasa de "demo bonita" a **agente de IA real y funcional** que impresiona a cualquiera.

@@ -4,6 +4,8 @@ import { clearHistory } from '../../core/memory.js';
 import { listTools } from '../../core/dispatcher.js';
 import { logger } from '../../core/logger.js';
 
+const lastTranscriptionByChat = new Map<string, string>();
+
 export async function startTelegramBot() {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) throw new Error('TELEGRAM_BOT_TOKEN not set in .env');
@@ -85,6 +87,17 @@ export async function startTelegramBot() {
         const chatId = String(ctx.chat.id);
         const userText = ctx.message.text;
 
+        // Quick shortcut to read last transcribed audio
+        if (isReadLastAudioRequest(userText)) {
+            const last = lastTranscriptionByChat.get(chatId);
+            if (!last) {
+                await ctx.reply('ℹ️ Aun no tengo una transcripcion de audio reciente en este chat.');
+                return;
+            }
+            await sendLongReply(ctx, `🎙️ Ultima transcripcion:\n\n${last}`);
+            return;
+        }
+
         // Show typing indicator
         await ctx.replyWithChatAction('typing');
 
@@ -115,6 +128,7 @@ export async function startTelegramBot() {
         try {
             await ctx.reply('🎙️ Recibido. Estoy transcribiendo tu nota de voz...');
             const transcription = await transcribeTelegramFile(ctx, ctx.message.voice.file_id);
+            lastTranscriptionByChat.set(chatId, transcription);
             const response = await processMessage(chatId, transcription);
             await sendLongReply(ctx, response);
         } catch (err) {
@@ -132,6 +146,7 @@ export async function startTelegramBot() {
         try {
             await ctx.reply('🎧 Recibido. Estoy transcribiendo el audio...');
             const transcription = await transcribeTelegramFile(ctx, ctx.message.audio.file_id);
+            lastTranscriptionByChat.set(chatId, transcription);
             const response = await processMessage(chatId, transcription);
             await sendLongReply(ctx, response);
         } catch (err) {
@@ -210,4 +225,16 @@ async function transcribeTelegramFile(ctx: Context, fileId: string): Promise<str
     if (!text) throw new Error('No se pudo transcribir el audio');
 
     return `[Transcripcion de audio]\n${text}`;
+}
+
+function isReadLastAudioRequest(text: string): boolean {
+    const normalized = text.trim().toLowerCase();
+    return (
+        normalized === 'lee el audio' ||
+        normalized === 'leer el audio' ||
+        normalized === 'lee la transcripcion' ||
+        normalized === 'leer la transcripcion' ||
+        normalized === 'muestra la transcripcion' ||
+        normalized === 'repite la transcripcion'
+    );
 }
