@@ -111,16 +111,7 @@ export async function startTelegramBot() {
 
         try {
             const response = await processMessage(chatId, userText);
-            // Split long messages (Telegram limit: 4096 chars)
-            if (response.length <= 4096) {
-                await ctx.reply(response, { parse_mode: 'Markdown' });
-            } else {
-                // Split into chunks
-                const chunks = response.match(/.{1,4000}/gs) ?? [response];
-                for (const chunk of chunks) {
-                    await ctx.reply(chunk, { parse_mode: 'Markdown' });
-                }
-            }
+            await sendLongReply(ctx, response);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             logger.error('Telegram handler error:', msg);
@@ -191,14 +182,14 @@ export async function startTelegramBot() {
 }
 
 async function sendLongReply(ctx: Context, response: string) {
-    if (response.length <= 4096) {
-        await ctx.reply(response, { parse_mode: 'Markdown' });
-        return;
-    }
-
     const chunks = response.match(/.{1,4000}/gs) ?? [response];
     for (const chunk of chunks) {
-        await ctx.reply(chunk, { parse_mode: 'Markdown' });
+        try {
+            await ctx.reply(chunk, { parse_mode: 'Markdown' });
+        } catch {
+            // Fallback when Markdown entities are malformed in dynamic tool output.
+            await ctx.reply(chunk);
+        }
     }
 }
 
