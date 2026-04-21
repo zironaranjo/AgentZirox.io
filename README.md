@@ -57,6 +57,7 @@ npm run dev
 | `capture_note` | Captura rapida de ideas/notas en `capturas/*.md` con fecha |
 | `drive_create_folder` | Crear carpetas en Google Drive con OAuth2 |
 | `drive_save_important_emails` | Guardar correos importantes de Gmail en Drive |
+| `drive_archive_important_emails` | Crear carpeta + guardar correos importantes en un paso |
 
 ## Workspace operativo (clientes y redes)
 

@@ -136,3 +136,18 @@ export async function saveImportantEmailsToDrive(folderId: string, limit: number
 
     return { total: uploadedFiles.length, files: uploadedFiles };
 }
+
+export async function archiveImportantEmailsByFolderName(
+    folderName: string,
+    limit: number,
+    parentFolderId?: string
+): Promise<{ folderId: string; folderName: string; total: number; files: string[] }> {
+    const folder = await createDriveFolder(folderName, parentFolderId);
+    const saved = await saveImportantEmailsToDrive(folder.id, limit);
+    return {
+        folderId: folder.id,
+        folderName: folder.name,
+        total: saved.total,
+        files: saved.files,
+    };
+}
