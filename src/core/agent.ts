@@ -24,6 +24,7 @@ export async function processMessage(chatId: string, userMessage: string): Promi
     // Agentic loop: keep calling tools until LLM produces a final text response
     let iterations = 0;
     const MAX_ITERATIONS = 5;
+    const executedToolResults: string[] = [];
 
     while (response.toolCalls && response.toolCalls.length > 0 && iterations < MAX_ITERATIONS) {
         iterations++;
@@ -38,6 +39,7 @@ export async function processMessage(chatId: string, userMessage: string): Promi
         for (const tc of response.toolCalls) {
             const result = await executeTool(tc.name, tc.arguments);
             logger.info(`🔧 Tool [${tc.name}] result:`, result.substring(0, 200));
+            executedToolResults.push(result);
             // Add tool result back into conversation context
             toolResults.push({
                 role: 'user',
@@ -50,7 +52,10 @@ export async function processMessage(chatId: string, userMessage: string): Promi
         response = await callLLM([...updatedHistory, ...toolResults], tools);
     }
 
-    const finalContent = response.content || '✅ Hecho.';
+    const finalContent =
+        response.content?.trim() ||
+        (executedToolResults.length > 0 ? executedToolResults[executedToolResults.length - 1] : '') ||
+        '✅ Hecho.';
     saveMessage(chatId, 'assistant', finalContent);
     return finalContent;
 }
