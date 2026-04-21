@@ -55,6 +55,8 @@ npm run dev
 | `list_files` | Listar carpetas y archivos del workspace seguro |
 | `create_client_workspace` | Crear estructura base de cliente con plantillas |
 | `capture_note` | Captura rapida de ideas/notas en `capturas/*.md` con fecha |
+| `drive_create_folder` | Crear carpetas en Google Drive con OAuth2 |
+| `drive_save_important_emails` | Guardar correos importantes de Gmail en Drive |
 
 ## Workspace operativo (clientes y redes)
 
@@ -73,6 +75,18 @@ Si usas OpenRouter con un modelo que no soporta tools (por ejemplo algunos endpo
 LLM_PROVIDER=openrouter
 OPENROUTER_MODEL=nousresearch/hermes-3-llama-3.1-70b
 OPENROUTER_TOOLS_MODEL=anthropic/claude-3.5-sonnet
+```
+
+## Google Drive + Gmail
+
+Para crear carpetas en Drive y guardar correos importantes, configura OAuth2 en `.env`:
+
+```env
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REFRESH_TOKEN=...
+GOOGLE_REDIRECT_URI=http://localhost:3000/oauth2callback
+GOOGLE_DRIVE_ROOT_FOLDER_ID=
 ```
 
 ## MCP Server
