@@ -22,6 +22,7 @@ export async function startTelegramBot() {
             `• 🌐 Llamar cualquier API\n` +
             `• 🔌 Integrar servicios via MCP\n` +
             `• 🎙️ Transcribir notas de voz\n` +
+            `• 🖼️ Analizar imagenes\n` +
             `• 💾 Recordar conversaciones anteriores\n\n` +
             `Solo escríbeme lo que necesitas!\n\n` +
             `Comandos:\n` +
@@ -163,6 +164,21 @@ export async function startTelegramBot() {
         }
     });
 
+    // ── Photo handler ────────────────────────────────────────────────────────
+    bot.on('message:photo', async (ctx) => {
+        await ctx.replyWithChatAction('typing');
+        try {
+            await ctx.reply('🖼️ Recibido. Estoy analizando la imagen...');
+            const bestPhoto = ctx.message.photo[ctx.message.photo.length - 1];
+            const analysis = await analyzeTelegramPhoto(ctx, bestPhoto.file_id, ctx.message.caption);
+            await sendLongReply(ctx, analysis);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.error('Telegram photo handler error:', msg);
+            await ctx.reply(`❌ Error analizando imagen: ${msg}`);
+        }
+    });
+
     // ── Error handler ─────────────────────────────────────────────────────────
     bot.catch((err) => {
         logger.error('Bot error:', err.message);
@@ -254,4 +270,82 @@ function isAudioCapabilityQuestion(text: string): boolean {
         normalized.includes('puedes escuchar') && normalized.includes('audio') ||
         normalized.includes('puedes procesar') && normalized.includes('audio')
     );
+}
+
+async function analyzeTelegramPhoto(
+    ctx: Context,
+    fileId: string,
+    caption?: string
+): Promise<string> {
+    const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
+    const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+    const visionModel = process.env.OPENROUTER_VISION_MODEL ?? 'openai/gpt-4o-mini';
+
+    if (!telegramToken) throw new Error('TELEGRAM_BOT_TOKEN no configurado');
+    if (!openRouterApiKey) {
+        throw new Error('OPENROUTER_API_KEY no configurado para analisis de imagen');
+    }
+
+    const telegramFile = await ctx.api.getFile(fileId);
+    if (!telegramFile.file_path) {
+        throw new Error('No se pudo obtener la ruta de la imagen en Telegram');
+    }
+
+    const fileUrl = `https://api.telegram.org/file/bot${telegramToken}/${telegramFile.file_path}`;
+    const fileRes = await fetch(fileUrl);
+    if (!fileRes.ok) {
+        throw new Error(`No se pudo descargar la imagen de Telegram (${fileRes.status})`);
+    }
+
+    const imageBuffer = Buffer.from(await fileRes.arrayBuffer());
+    const imageBase64 = imageBuffer.toString('base64');
+    const prompt =
+        (caption?.trim() ? `Peticion del usuario: ${caption.trim()}\n\n` : '') +
+        'Analiza esta imagen en espanol. Describe lo relevante y responde de forma util y concreta.';
+
+    const payload = {
+        model: visionModel,
+        messages: [
+            {
+                role: 'user',
+                content: [
+                    { type: 'text', text: prompt },
+                    {
+                        type: 'image_url',
+                        image_url: {
+                            url: `data:image/jpeg;base64,${imageBase64}`,
+                        },
+                    },
+                ],
+            },
+        ],
+        temperature: 0.2,
+        max_tokens: 800,
+    };
+
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${openRouterApiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://agentezirox.io',
+            'X-Title': 'AgenteZirox',
+        },
+        body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Fallo de vision (${res.status}): ${errText}`);
+    }
+
+    const json = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+    };
+    const content = json.choices?.[0]?.message?.content?.trim();
+    if (!content) {
+        throw new Error('El modelo no devolvio analisis de imagen');
+    }
+
+    return `🖼️ Analisis de imagen:\n\n${content}`;
 }
