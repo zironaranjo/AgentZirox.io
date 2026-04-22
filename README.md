@@ -56,6 +56,7 @@ npm run dev
 | `list_files` | Listar carpetas y archivos del workspace seguro |
 | `create_client_workspace` | Crear estructura base de cliente con plantillas |
 | `capture_note` | Captura rapida de ideas/notas en `capturas/*.md` con fecha |
+| `remember_about_user` | Guarda nombre preferido y gustos en SQLite; se inyectan en el system prompt en cada mensaje |
 | `drive_create_folder` | Crear carpetas en Google Drive con OAuth2 |
 | `drive_save_important_emails` | Guardar correos importantes de Gmail en Drive |
 | `drive_archive_important_emails` | Crear carpeta + guardar correos importantes en un paso |
@@ -70,6 +71,8 @@ WORKSPACE_BASE_DIR=/opt/zirox-workspace
 
 Todas las tools de archivos (`create_folder`, `write_file`, `list_files`) quedan restringidas a esa ruta base para evitar accesos fuera del workspace.
 Para captura rapida de ideas, el agente puede usar `capture_note` y guardar en `capturas/ideas.md`.
+
+Perfil persistente: configura `USER_DISPLAY_NAME` y/o `USER_PROFILE` en el entorno, o deja que el usuario lo diga en el chat; el agente puede usar `remember_about_user` para guardar nombre y preferencias (tabla `metadata` en `agent_memory.db`). `clear_memory` solo borra el historial del chat, no el perfil.
 
 Si usas OpenRouter con un modelo que no soporta tools (por ejemplo algunos endpoints de Hermes), puedes separar modelo de chat y modelo para herramientas:
 

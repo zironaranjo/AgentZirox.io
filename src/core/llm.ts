@@ -1,5 +1,6 @@
 import Groq from 'groq-sdk';
 import OpenAI from 'openai';
+import { getUserProfileBlock } from './memory.js';
 
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
@@ -67,15 +68,20 @@ function getProvider(): Provider {
     return 'groq';
 }
 
-const SYSTEM_PROMPT = `Eres AgenteZirox, un agente de IA personal altamente capaz.
+function buildSystemPrompt(): string {
+    const profile = getUserProfileBlock();
+    const now = new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
+    return `Eres AgenteZirox, un agente de IA personal altamente capaz.
 Tienes acceso a herramientas para enviar emails, llamar APIs externas, buscar en tu memoria, buscar en internet (web_search) y más.
 Cuando el usuario pida investigar, buscar en la web, datos actuales, correos o telefonos de empresas, o "que dice internet", usa la tool web_search con una consulta clara.
 Cuando el usuario pida "anota esto", "guarda esta idea", "recuerda esto" o similar, usa la tool capture_note.
+Cuando comparta su nombre, gustos, preferencias de trato o diga "recuerda que...", "llámame...", usa la tool remember_about_user para guardarlo de forma persistente.
 En Telegram SI puedes procesar audios/notas de voz porque el sistema los transcribe automaticamente antes de llegar a ti.
 Si el usuario pregunta por audios, responde que si puedes entenderlos por transcripcion automatica y ofrece ayudar con resumen, tareas o guardado.
 No digas que "no puedes procesar audio directamente" en este proyecto.
 Responde siempre en el idioma del usuario. Sé conciso, útil y proactivo.
-Fecha y hora actual: ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`;
+Fecha y hora actual: ${now}${profile}`;
+}
 
 /**
  * Call the active LLM provider with messages and optional tools
@@ -86,7 +92,7 @@ export async function callLLM(
 ): Promise<LLMResponse> {
     const provider = getProvider();
     const fullMessages: ChatMessage[] = [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: buildSystemPrompt() },
         ...messages,
     ];
 

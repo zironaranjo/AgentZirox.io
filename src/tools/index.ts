@@ -14,6 +14,7 @@ import './append-file.js';
 import './read-file.js';
 import './create-client-workspace.js';
 import './capture-note.js';
+import './remember-user.js';
 import './drive-create-folder.js';
 import './drive-save-important-emails.js';
 import './drive-archive-important-emails.js';
