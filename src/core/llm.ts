@@ -1,6 +1,6 @@
 import Groq from 'groq-sdk';
 import OpenAI from 'openai';
-import { getUserProfileBlock } from './memory.js';
+import { getUserProfileBlock } from './memory';
 
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant';

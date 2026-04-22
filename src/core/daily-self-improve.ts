@@ -1,6 +1,6 @@
-import { callLLMSimple } from './llm.js';
-import { appendUserProfileNote, getMeta, getRecentMessagesAllChats, setMeta } from './memory.js';
-import { logger } from './logger.js';
+import { callLLMSimple } from './llm';
+import { appendUserProfileNote, getMeta, getRecentMessagesAllChats, setMeta } from './memory';
+import { logger } from './logger';
 
 const META_LAST_DAY = 'self_improve_last_day';
 
