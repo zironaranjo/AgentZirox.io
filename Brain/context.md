@@ -1,6 +1,6 @@
 # 🧠 Ziro - System Architecture & Context
 
-> Última actualización: 20 de Abril 2026
+> Última actualización: 21 de Abril 2026
 
 ## 1. Project Overview
 **Ziro** es un Agente de IA Personal que opera simultáneamente como:
@@ -98,8 +98,11 @@ AgentZirox.io/
 | `OPENROUTER_API_KEY` | 🔵 | Solo si usas OpenRouter |
 | `OPENROUTER_MODEL` | 🔵 | Modelo principal de chat |
 | `OPENROUTER_TOOLS_MODEL` | 🔵 | Modelo compatible con tool-calling |
+| `OPENROUTER_VISION_MODEL` | 🔵 | Modelo para analisis de imagen en Telegram |
 | `HERMES_BASE_URL` / `HERMES_API_KEY` / `HERMES_MODEL` | 🔵 | Solo si usas provider `hermes` |
 | `SMTP_*` / `IMAP_*` | 🔵 | Solo si usas integración de email |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REFRESH_TOKEN` | 🔵 | OAuth2 para Google Drive + Gmail API |
+| `GOOGLE_REDIRECT_URI` / `GOOGLE_DRIVE_ROOT_FOLDER_ID` | 🔵 | URI OAuth y carpeta raiz opcional en Drive |
 | `WORKSPACE_BASE_DIR` | ✅ | Sandbox de archivos del agente en VPS |
 
 ---
@@ -120,10 +123,17 @@ AgentZirox.io/
 - [x] Plantilla rápida por cliente: `create_client_workspace`
 - [x] Captura rápida de ideas: `capture_note` (ej: "anota esto...")
 - [x] Soporte de mensajes de voz/audio de Telegram con transcripción automática
+- [x] Soporte de analisis de imagen en Telegram (`message:photo` + OpenRouter Vision)
+- [x] Integracion Google Drive/Gmail con tools:
+  - `drive_create_folder`
+  - `drive_save_important_emails`
+  - `drive_archive_important_emails`
+- [x] Fix robusto de respuestas Telegram cuando falla parseo Markdown (fallback a texto plano)
+- [x] Fix del loop del agente para no responder solo "✅ Hecho." y devolver resultado real de tools
 
 ## 7. Próximos Pasos / Roadmap
 - [ ] **Paridad completa Web Chat vs Telegram** — asegurar que web use exactamente el mismo loop de tools y memoria
-- [ ] **Integración Google Drive + Gmail API** — guardar correos importantes en carpetas por cliente
+- [ ] **Cerrar loop de permisos Google en producción** — terminar validación OAuth estable para archivado de correos sin errores de autorización
 - [ ] **Canales adicionales** — Instagram/WhatsApp como bandeja de entrada de notas/tareas
 - [ ] **Auth** — Añadir Clerk o NextAuth para proteger dashboard
 - [ ] **Dashboard de Admin** — panel de conversaciones, jobs y configuración de tools

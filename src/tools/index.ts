@@ -2,6 +2,7 @@
 import './send-email.js';
 import './read-inbox.js';
 import './call-api.js';
+import './web-search.js';
 import './search-memory.js';
 import './clear-memory.js';
 import './list-tools.js';

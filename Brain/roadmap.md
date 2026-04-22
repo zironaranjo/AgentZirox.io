@@ -1,6 +1,6 @@
 # 🗺️ Ziro — Roadmap hacia un Agente Profesional
 
-> Estado actual: Agente operativo en Telegram + Web, con workspace seguro y voz ✅  
+> Estado actual: Agente operativo en Telegram + Web, con workspace, voz e imagen ✅  
 > Objetivo: Sistema autónomo para productividad, clientes y operaciones de contenido
 
 ---
@@ -19,6 +19,10 @@
 - [x] Tools de archivos para operaciones de clientes
 - [x] Captura rápida de ideas (`capture_note`)
 - [x] Soporte de notas de voz/audio Telegram con transcripción
+- [x] Soporte de imagen Telegram (analisis con OpenRouter Vision)
+- [x] Tools Google Drive/Gmail para crear carpeta y archivar correos
+- [x] Fallback anti-error Markdown en Telegram para mensajes dinamicos
+- [x] Respuesta final del agente basada en resultado real de tools (no solo "Hecho")
 
 ### 🔲 Pendiente
 - [ ] **Paridad completa Web + Telegram**  
@@ -65,8 +69,8 @@
   Crear y editar páginas de Notion o notas de Obsidian directamente desde el chat.
 
 ### 🌐 Skills de Integración
-- [ ] **Google Drive + Gmail API**  
-  Crear carpetas por cliente y archivar correos importantes automáticamente.
+- [ ] **Google Drive + Gmail API (hardening de permisos OAuth)**  
+  Estabilizar autorizacion en produccion para archivado de correos sin errores intermitentes.
 
 - [ ] **Instagram DM Inbox**  
   Captura de ideas/tareas desde Instagram y sincronización al workspace.
@@ -127,7 +131,7 @@
 |---|---|---|---|
 | Paridad Web + Telegram | 🔥🔥🔥 | ⚡ Bajo | ⭐⭐⭐⭐⭐ |
 | Streaming de respuestas web | 🔥🔥🔥 | ⚡ Bajo | ⭐⭐⭐⭐⭐ |
-| Google Drive + Gmail API | 🔥🔥🔥 | 🔨 Medio | ⭐⭐⭐⭐ |
+| Drive + Gmail OAuth hardening | 🔥🔥🔥 | 🔨 Medio | ⭐⭐⭐⭐ |
 | Historial web | 🔥🔥 | ⚡ Bajo | ⭐⭐⭐⭐ |
 | Instagram inbox | 🔥🔥🔥 | 🏗️ Alto | ⭐⭐⭐ |
 | Knowledge base semántica | 🔥🔥🔥 | 🏗️ Alto | ⭐⭐⭐ |
@@ -142,7 +146,7 @@
 ```
 1️⃣  Paridad Web + Telegram (mismo pipeline de tools)  
 2️⃣  Streaming de respuestas en web  
-3️⃣  Integración Drive + Gmail API para archivo automático de correos  
+3️⃣  Hardening OAuth de Drive + Gmail y pruebas end-to-end de archivado  
 4️⃣  Vista de historial y capturas en dashboard
 ```
 
