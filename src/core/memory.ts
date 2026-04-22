@@ -5,9 +5,10 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = path.join(__dirname, '../../agent_memory.db');
 
-let db: Database.Database;
+let db: Database.Database | undefined;
 
 export async function initMemory(): Promise<void> {
+    if (db) return;
     db = new Database(DB_PATH);
     db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
@@ -50,6 +51,16 @@ export function getHistory(chatId: string, limit = 20): Array<{ role: string; co
             'SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT ?'
         )
         .all(chatId, limit) as Array<{ role: string; content: string }>;
+    return rows.reverse();
+}
+
+/** Mensajes recientes de todos los chats (para resúmenes / auto-mejora). Más recientes al final. */
+export function getRecentMessagesAllChats(limit: number): Array<{ role: string; content: string; created_at: string }> {
+    const rows = getDb()
+        .prepare(
+            `SELECT role, content, created_at FROM messages ORDER BY created_at DESC LIMIT ?`
+        )
+        .all(limit) as Array<{ role: string; content: string; created_at: string }>;
     return rows.reverse();
 }
 

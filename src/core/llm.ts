@@ -105,6 +105,56 @@ export async function callLLM(
     }
 }
 
+export interface CallLLMSimpleOptions {
+    temperature?: number;
+    max_tokens?: number;
+}
+
+/**
+ * Llamada al LLM sin el system prompt del agente ni herramientas (p. ej. extracción, resúmenes).
+ */
+export async function callLLMSimple(
+    systemContent: string,
+    messages: ChatMessage[],
+    options?: CallLLMSimpleOptions
+): Promise<string> {
+    const temperature = options?.temperature ?? 0.35;
+    const max_tokens = options?.max_tokens ?? 900;
+    const fullMessages: ChatMessage[] = [{ role: 'system', content: systemContent }, ...messages];
+    const provider = getProvider();
+
+    if (provider === 'groq') {
+        const model = process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile';
+        const res = await getGroqClient().chat.completions.create({
+            model,
+            messages: fullMessages as any,
+            temperature,
+            max_tokens,
+        });
+        return (res.choices[0]?.message?.content ?? '').trim();
+    }
+
+    if (provider === 'hermes') {
+        const model = process.env.HERMES_MODEL ?? 'hermes-3-llama-3.1-70b';
+        const res = await getHermesClient().chat.completions.create({
+            model,
+            messages: fullMessages as OpenAI.Chat.ChatCompletionMessageParam[],
+            temperature,
+            max_tokens,
+        });
+        return (res.choices[0]?.message?.content ?? '').trim();
+    }
+
+    const model = process.env.OPENROUTER_MODEL ?? 'anthropic/claude-3.5-sonnet';
+    const res = await getOpenRouterClient().chat.completions.create({
+        model,
+        messages: fullMessages as OpenAI.Chat.ChatCompletionMessageParam[],
+        temperature,
+        max_tokens,
+    });
+    return (res.choices[0]?.message?.content ?? '').trim();
+}
+
 async function callGroq(messages: ChatMessage[], tools?: LLMTool[]): Promise<LLMResponse> {
     const model = process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile';
 

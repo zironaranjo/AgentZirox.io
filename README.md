@@ -74,6 +74,16 @@ Para captura rapida de ideas, el agente puede usar `capture_note` y guardar en `
 
 Perfil persistente: configura `USER_DISPLAY_NAME` y/o `USER_PROFILE` en el entorno, o deja que el usuario lo diga en el chat; el agente puede usar `remember_about_user` para guardar nombre y preferencias (tabla `metadata` en `agent_memory.db`). `clear_memory` solo borra el historial del chat, no el perfil.
 
+### Auto-mejora diaria (cron)
+
+Con `SELF_IMPROVE_ENABLED=true` y un `SELF_IMPROVE_CRON_SECRET` largo, puedes programar **una petición al día** (GET o POST) a:
+
+`https://TU_DOMINIO/api/cron/self-improve`
+
+Cabecera: `Authorization: Bearer TU_SECRETO` (o `x-cron-secret: TU_SECRETO`).
+
+El job lee mensajes recientes en SQLite, pide al LLM hasta 5 viñetas útiles (preferencias, correcciones, temas recurrentes) y las añade al perfil con prefijo `[auto YYYY-MM-DD]`. Como mucho **una ejecución efectiva por día** (zona `Europe/Madrid`). Si hay poca actividad, marca el día y no llama al modelo. Para forzar otro paso el mismo día, borra la clave `self_improve_last_day` en `metadata` o espera al día siguiente.
+
 Si usas OpenRouter con un modelo que no soporta tools (por ejemplo algunos endpoints de Hermes), puedes separar modelo de chat y modelo para herramientas:
 
 ```env
