@@ -184,6 +184,19 @@ export async function createSpreadsheet(
     return { id, name: createRes.data.name, url };
 }
 
+/** Titulo de la primera pestaña (para rangos A1 justo tras crear un documento). */
+export async function getFirstSheetTitle(spreadsheetId: string): Promise<string> {
+    const auth = getGoogleAuthClient();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const res = await sheets.spreadsheets.get({
+        spreadsheetId,
+        fields: 'sheets.properties.title',
+    });
+    const t = res.data.sheets?.[0]?.properties?.title;
+    if (!t) throw new Error('No se encontro ninguna pestaña en el spreadsheet');
+    return t;
+}
+
 export async function sheetsGetValues(spreadsheetId: string, rangeA1: string): Promise<string[][]> {
     const auth = getGoogleAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });

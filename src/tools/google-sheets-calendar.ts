@@ -3,9 +3,55 @@ import {
     calendarCreateEvent,
     calendarListEvents,
     createSpreadsheet,
+    getFirstSheetTitle,
     sheetsGetValues,
     sheetsUpdateValues,
 } from '../integrations/google/google';
+
+registerTool({
+    name: 'google_sheets_quick_note',
+    description:
+        'Crear un Google Spreadsheet nuevo y guardar UNA nota en texto libre (lenguaje natural). Usar cuando el usuario diga algo como "crea una hoja con una nota", "anota que mañana voy al cine a las 8", sin pedir JSON ni rangos.',
+    parameters: {
+        type: 'object',
+        properties: {
+            note_text: {
+                type: 'string',
+                description: 'Texto completo de la nota tal como debe quedar guardada',
+            },
+            document_title: {
+                type: 'string',
+                description:
+                    'Titulo del archivo en Drive (opcional). Ej. Notas personales, Ideas Zirox. Si vacio se usa "Nota rapida" + fecha Madrid.',
+            },
+        },
+        required: ['note_text'],
+    },
+    handler: async (args) => {
+        const { note_text, document_title } = args as { note_text: string; document_title?: string };
+        const text = note_text.trim();
+        if (!text) throw new Error('note_text vacio');
+
+        const dateStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' });
+        const title =
+            (document_title?.trim() || `Nota rapida ${dateStr}`).slice(0, 120);
+
+        const doc = await createSpreadsheet(title);
+        const tab = await getFirstSheetTitle(doc.id);
+        const tabQ = /^[A-Za-z0-9_]+$/.test(tab) ? tab : `'${tab.replace(/'/g, "''")}'`;
+        const range = `${tabQ}!A1:A2`;
+
+        const created = new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
+        await sheetsUpdateValues(doc.id, range, [[text], [`Registrado: ${created}`]]);
+
+        return [
+            '✅ Hoja creada con tu nota.',
+            `📛 ${doc.name}`,
+            `🆔 ID: \`${doc.id}\``,
+            `🔗 ${doc.url}`,
+        ].join('\n');
+    },
+});
 
 registerTool({
     name: 'google_sheets_create',
