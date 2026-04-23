@@ -25,6 +25,19 @@ function getGoogleAuthClient() {
     return oauth2Client;
 }
 
+const GOOGLE_OAUTH_SCOPE_HINT =
+    'Regenera GOOGLE_REFRESH_TOKEN con los scopes del README: `spreadsheets` obligatorio para Sheets; si indicas carpeta en Drive o GOOGLE_DRIVE_ROOT_FOLDER_ID, añade tambien `https://www.googleapis.com/auth/drive.file`.';
+
+function augmentGoogleError(err: unknown): Error {
+    if (err instanceof Error) {
+        const m = err.message;
+        if (/insufficient authentication scopes/i.test(m) || /Insufficient Permission/i.test(m)) {
+            return new Error(`${GOOGLE_OAUTH_SCOPE_HINT}\n\nDetalle API: ${m}`);
+        }
+    }
+    return err instanceof Error ? err : new Error(String(err));
+}
+
 function sanitizeFileName(input: string): string {
     return input
         .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
@@ -154,34 +167,62 @@ export async function archiveImportantEmailsByFolderName(
 
 // ── Google Sheets ───────────────────────────────────────────────────────────
 
-/** Crea un nuevo Google Spreadsheet (vacío, una hoja por defecto). */
+/**
+ * Crea un Spreadsheet vacío (una pestaña por defecto).
+ * Usa Sheets API `spreadsheets.create` (scope `spreadsheets`), no Drive `files.create`,
+ * para que funcione con tokens que solo tienen Sheets.
+ * Si hay carpeta destino (argumento o GOOGLE_DRIVE_ROOT_FOLDER_ID), mueve el archivo con Drive API (hace falta `drive.file`).
+ */
 export async function createSpreadsheet(
     title: string,
     parentFolderId?: string
 ): Promise<{ id: string; name: string; url: string }> {
     const auth = getGoogleAuthClient();
-    const drive = google.drive({ version: 'v3', auth });
-    const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
-    const parent = parentFolderId || rootFolderId;
+    const sheets = google.sheets({ version: 'v4', auth });
+    const trimmed = title.trim();
 
-    const createRes = await drive.files.create({
-        requestBody: {
-            name: title.trim(),
-            mimeType: 'application/vnd.google-apps.spreadsheet',
-            ...(parent ? { parents: [parent] } : {}),
-        },
-        fields: 'id,name,webViewLink',
-    });
+    try {
+        const createRes = await sheets.spreadsheets.create({
+            requestBody: { properties: { title: trimmed } },
+        });
 
-    if (!createRes.data.id || !createRes.data.name) {
-        throw new Error('No se pudo crear la hoja de calculo.');
+        const id = createRes.data.spreadsheetId;
+        if (!id) {
+            throw new Error('No se pudo crear la hoja de calculo.');
+        }
+
+        const name = createRes.data.properties?.title ?? trimmed;
+        const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+        const parent = parentFolderId?.trim() || rootFolderId;
+
+        if (parent) {
+            try {
+                const drive = google.drive({ version: 'v3', auth });
+                const meta = await drive.files.get({ fileId: id, fields: 'parents' });
+                const prevParents = meta.data.parents?.join(',') ?? '';
+                await drive.files.update({
+                    fileId: id,
+                    addParents: parent,
+                    removeParents: prevParents,
+                    fields: 'id',
+                });
+            } catch (moveErr) {
+                const moveMsg = moveErr instanceof Error ? moveErr.message : String(moveErr);
+                const scopeProblem =
+                    /insufficient authentication scopes/i.test(moveMsg) ||
+                    /Insufficient Permission/i.test(moveMsg);
+                if (!scopeProblem) {
+                    throw augmentGoogleError(moveErr);
+                }
+                // Hoja ya creada en la raiz de Drive; falta drive.file (o reautorizar) para moverla.
+            }
+        }
+
+        const url = `https://docs.google.com/spreadsheets/d/${id}/edit`;
+        return { id, name, url };
+    } catch (e) {
+        throw augmentGoogleError(e);
     }
-
-    const id = createRes.data.id;
-    const url =
-        createRes.data.webViewLink ?? `https://docs.google.com/spreadsheets/d/${id}/edit`;
-
-    return { id, name: createRes.data.name, url };
 }
 
 /** Titulo de la primera pestaña (para rangos A1 justo tras crear un documento). */

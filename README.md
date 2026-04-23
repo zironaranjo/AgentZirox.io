@@ -126,10 +126,13 @@ En [Google Cloud Console](https://console.cloud.google.com/) del proyecto:
 
 1. **APIs y servicios → Biblioteca**: habilita **Google Sheets API** y **Google Calendar API** (además de Drive/Gmail si ya los usas).
 2. **Pantalla de consentimiento OAuth**: añade los ámbitos (scopes):
-   - `https://www.googleapis.com/auth/spreadsheets`
-   - `https://www.googleapis.com/auth/calendar.events`  
-   (y los que ya tengas para Drive/Gmail, p. ej. `drive.file`, `gmail.readonly`).
-3. **Vuelve a generar un `GOOGLE_REFRESH_TOKEN`** con todos esos scopes (OAuth 2.0 Playground, script o flujo local). El token antiguo **no** incluye permisos nuevos hasta que reautorices.
+   - `https://www.googleapis.com/auth/spreadsheets` — crear hojas y leer/escribir celdas (obligatorio para las tools de Sheets).
+   - `https://www.googleapis.com/auth/calendar.events` — listar/crear eventos.
+   - `https://www.googleapis.com/auth/drive.file` — **solo si** usas `parent_folder_id` en `google_sheets_create`, o `GOOGLE_DRIVE_ROOT_FOLDER_ID`, o tools que crean carpetas/archivos en Drive (mover la hoja a una carpeta concreta).
+   - (Los de Gmail si archivas correos, p. ej. `gmail.readonly` / `gmail.modify` según tu flujo.)
+3. **Vuelve a generar un `GOOGLE_REFRESH_TOKEN`** con todos esos scopes (OAuth 2.0 Playground, script o flujo local). El token antiguo **no** incluye permisos nuevos hasta que reautorices. Si ves `Request had insufficient authentication scopes`, casi siempre falta reautorizar tras añadir un scope o falta `spreadsheets` / `drive.file` según el caso.
+
+**Nota:** La creación de un Spreadsheet **sin** carpeta padre usa la API de Sheets; no hace falta scope de Drive solo por crear la hoja (aparecerá en tu Drive por defecto).
 
 ### Herramientas del agente
 
