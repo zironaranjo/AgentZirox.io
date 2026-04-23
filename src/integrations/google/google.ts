@@ -154,6 +154,36 @@ export async function archiveImportantEmailsByFolderName(
 
 // ── Google Sheets ───────────────────────────────────────────────────────────
 
+/** Crea un nuevo Google Spreadsheet (vacío, una hoja por defecto). */
+export async function createSpreadsheet(
+    title: string,
+    parentFolderId?: string
+): Promise<{ id: string; name: string; url: string }> {
+    const auth = getGoogleAuthClient();
+    const drive = google.drive({ version: 'v3', auth });
+    const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+    const parent = parentFolderId || rootFolderId;
+
+    const createRes = await drive.files.create({
+        requestBody: {
+            name: title.trim(),
+            mimeType: 'application/vnd.google-apps.spreadsheet',
+            ...(parent ? { parents: [parent] } : {}),
+        },
+        fields: 'id,name,webViewLink',
+    });
+
+    if (!createRes.data.id || !createRes.data.name) {
+        throw new Error('No se pudo crear la hoja de calculo.');
+    }
+
+    const id = createRes.data.id;
+    const url =
+        createRes.data.webViewLink ?? `https://docs.google.com/spreadsheets/d/${id}/edit`;
+
+    return { id, name: createRes.data.name, url };
+}
+
 export async function sheetsGetValues(spreadsheetId: string, rangeA1: string): Promise<string[][]> {
     const auth = getGoogleAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });

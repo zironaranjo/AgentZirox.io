@@ -135,6 +135,7 @@ En [Google Cloud Console](https://console.cloud.google.com/) del proyecto:
 
 | Tool | Uso |
 |------|-----|
+| `google_sheets_create` | Crear un Spreadsheet nuevo (titulo; opcional carpeta Drive) |
 | `google_sheets_read` | Leer rango A1 de un spreadsheet (ID en la URL) |
 | `google_sheets_write` | Escribir filas (JSON de arrays) |
 | `google_calendar_list_events` | Eventos entre `time_min_iso` y `time_max_iso` |

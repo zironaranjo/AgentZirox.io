@@ -2,9 +2,40 @@ import { registerTool } from '../core/dispatcher';
 import {
     calendarCreateEvent,
     calendarListEvents,
+    createSpreadsheet,
     sheetsGetValues,
     sheetsUpdateValues,
 } from '../integrations/google/google';
+
+registerTool({
+    name: 'google_sheets_create',
+    description:
+        'Crear un nuevo Google Spreadsheet vacio (titulo libre). Opcionalmente dentro de una carpeta Drive (parent_folder_id). Devuelve id y enlace para abrirlo.',
+    parameters: {
+        type: 'object',
+        properties: {
+            title: { type: 'string', description: 'Nombre del documento, ej. Notas Zirox 2026' },
+            parent_folder_id: {
+                type: 'string',
+                description: 'ID de carpeta en Drive (opcional). Si vacio, usa GOOGLE_DRIVE_ROOT_FOLDER_ID o la raiz de Drive',
+            },
+        },
+        required: ['title'],
+    },
+    handler: async (args) => {
+        const { title, parent_folder_id } = args as { title: string; parent_folder_id?: string };
+        const parent = parent_folder_id?.trim() || undefined;
+        const doc = await createSpreadsheet(title, parent);
+        return [
+            '✅ Hoja creada.',
+            `📛 Nombre: ${doc.name}`,
+            `🆔 ID (para read/write): \`${doc.id}\``,
+            `🔗 ${doc.url}`,
+            '',
+            'La primera pestaña suele llamarse "Hoja 1". Para escribir cabeceras: rango `Hoja 1!A1:C1` o renombra la pestaña en Sheets.',
+        ].join('\n');
+    },
+});
 
 registerTool({
     name: 'google_sheets_read',
