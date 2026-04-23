@@ -63,6 +63,8 @@ npm run dev
 | `drive_create_folder` | Crear carpetas en Google Drive con OAuth2 |
 | `drive_save_important_emails` | Guardar correos importantes de Gmail en Drive |
 | `drive_archive_important_emails` | Crear carpeta + guardar correos importantes en un paso |
+| `linkedin_save_draft` | Guardar borrador de LinkedIn (post, titular, Acerca de, etc.) en `linkedin/drafts/*.md` |
+| `linkedin_list_drafts` | Listar borradores recientes en el workspace |
 
 ## Workspace operativo (clientes y redes)
 
