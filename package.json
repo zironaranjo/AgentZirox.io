@@ -10,7 +10,8 @@
     "dev": "npx tsx server.ts",
     "build": "next build",
     "start": "npx tsx server.ts",
-    "mcp": "tsx src/mcp/server.ts"
+    "mcp": "tsx src/mcp/server.ts",
+    "ping-cron": "node scripts/ping-scheduled-cron.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.5.0",
