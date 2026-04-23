@@ -34,6 +34,19 @@ export async function initMemory(): Promise<void> {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_sched_due ON scheduled_tasks(status, run_at_ms);
+
+    CREATE TABLE IF NOT EXISTS linkedin_pending_posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      body TEXT NOT NULL,
+      visibility TEXT NOT NULL DEFAULT 'PUBLIC' CHECK(visibility IN ('PUBLIC', 'CONNECTIONS')),
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'rejected', 'published', 'failed')),
+      linkedin_response TEXT,
+      error TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_li_pending_chat ON linkedin_pending_posts(chat_id, status);
   `);
 }
 
@@ -240,4 +253,75 @@ export function cancelScheduledTaskForChat(chatId: string, taskId: number): bool
         )
         .run(taskId, chatId);
     return r.changes === 1;
+}
+
+// ── LinkedIn: publicaciones pendientes de aprobación (Telegram) ─────────────
+
+export type LinkedInPendingRow = {
+    id: number;
+    chat_id: string;
+    body: string;
+    visibility: string;
+    status: string;
+    linkedin_response: string | null;
+    error: string | null;
+    created_at: string;
+};
+
+export function insertLinkedInPendingPost(
+    chatId: string,
+    body: string,
+    visibility: 'PUBLIC' | 'CONNECTIONS'
+): number {
+    const r = getDb()
+        .prepare(
+            `INSERT INTO linkedin_pending_posts (chat_id, body, visibility, status) VALUES (?, ?, ?, 'pending')`
+        )
+        .run(chatId, body, visibility);
+    return Number(r.lastInsertRowid);
+}
+
+export function getLinkedInPendingPostForChat(id: number, chatId: string): LinkedInPendingRow | null {
+    const row = getDb()
+        .prepare(
+            `SELECT id, chat_id, body, visibility, status, linkedin_response, error, created_at
+             FROM linkedin_pending_posts WHERE id = ? AND chat_id = ?`
+        )
+        .get(id, chatId) as LinkedInPendingRow | undefined;
+    return row ?? null;
+}
+
+export function listLinkedInPendingPostsForChat(chatId: string, limit = 15): LinkedInPendingRow[] {
+    return getDb()
+        .prepare(
+            `SELECT id, chat_id, body, visibility, status, linkedin_response, error, created_at
+             FROM linkedin_pending_posts
+             WHERE chat_id = ? AND status = 'pending' ORDER BY id DESC LIMIT ?`
+        )
+        .all(chatId, limit) as LinkedInPendingRow[];
+}
+
+export function setLinkedInPendingPublished(id: number, response: string): void {
+    getDb()
+        .prepare(
+            `UPDATE linkedin_pending_posts SET status = 'published', linkedin_response = ?, error = NULL,
+             updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+        )
+        .run(response, id);
+}
+
+export function setLinkedInPendingFailed(id: number, error: string): void {
+    getDb()
+        .prepare(
+            `UPDATE linkedin_pending_posts SET status = 'failed', error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+        )
+        .run(error, id);
+}
+
+export function setLinkedInPendingRejected(id: number): void {
+    getDb()
+        .prepare(
+            `UPDATE linkedin_pending_posts SET status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+        )
+        .run(id);
 }

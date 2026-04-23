@@ -1,6 +1,14 @@
 import { Bot, type Context } from 'grammy';
 import { processMessage } from '../../core/agent';
-import { clearHistory } from '../../core/memory';
+import {
+    clearHistory,
+    getLinkedInPendingPostForChat,
+    listLinkedInPendingPostsForChat,
+    setLinkedInPendingFailed,
+    setLinkedInPendingPublished,
+    setLinkedInPendingRejected,
+} from '../../core/memory';
+import { isLinkedInOAuthConfigured, publishLinkedInTextPost } from '../linkedin/linkedin-api';
 import { listTools } from '../../core/dispatcher';
 import { logger } from '../../core/logger';
 
@@ -23,13 +31,17 @@ export async function startTelegramBot() {
             `• 🔌 Integrar servicios via MCP\n` +
             `• 🎙️ Transcribir notas de voz\n` +
             `• 🖼️ Analizar imagenes\n` +
-            `• 💾 Recordar conversaciones anteriores\n\n` +
+            `• 💾 Recordar conversaciones anteriores\n` +
+            `• 💼 Borradores y publicacion LinkedIn (con tu aprobacion)\n\n` +
             `Solo escríbeme lo que necesitas!\n\n` +
             `Comandos:\n` +
             `/reset — Borrar historial\n` +
             `/status — Estado del agente\n` +
             `/tools — Ver herramientas disponibles\n` +
-            `/provider [groq|openrouter] — Cambiar LLM`,
+            `/provider [groq|openrouter] — Cambiar LLM\n` +
+            `/li_pending — Posts LinkedIn esperando tu OK\n` +
+            `/li_approve ID — Publicar en LinkedIn la propuesta ID\n` +
+            `/li_reject ID — Cancelar propuesta ID`,
             { parse_mode: 'Markdown' }
         );
     });
@@ -81,6 +93,76 @@ export async function startTelegramBot() {
         }
         process.env.LLM_PROVIDER = arg;
         await ctx.reply(`✅ Proveedor LLM cambiado a: **${arg}**`, { parse_mode: 'Markdown' });
+    });
+
+    // ── LinkedIn (aprobación humana antes de publicar) ────────────────────────
+    bot.command('li_pending', async (ctx) => {
+        const chatId = String(ctx.chat.id);
+        const rows = listLinkedInPendingPostsForChat(chatId, 15);
+        if (rows.length === 0) {
+            await ctx.reply('No hay publicaciones LinkedIn pendientes de aprobación en este chat.');
+            return;
+        }
+        const lines = rows.map((r) => {
+            const snippet = r.body.length > 220 ? `${r.body.slice(0, 220)}…` : r.body;
+            return `• #${r.id} (${r.visibility}) — ${r.created_at}\n${snippet}`;
+        });
+        await ctx.reply(
+            `📋 Pendientes:\n\n${lines.join('\n\n')}\n\nAprobar: /li_approve N — Rechazar: /li_reject N`
+        );
+    });
+
+    bot.command('li_approve', async (ctx) => {
+        const chatId = String(ctx.chat.id);
+        const text = ctx.message?.text ?? '';
+        const id = parseLiCommandId(text, 'li_approve');
+        if (id == null || !Number.isFinite(id)) {
+            await ctx.reply('Uso: /li_approve NUMERO (ejemplo: /li_approve 3)');
+            return;
+        }
+        if (!isLinkedInOAuthConfigured()) {
+            await ctx.reply('LinkedIn OAuth no configurado. Revisa LINKEDIN_* en .env (README).');
+            return;
+        }
+        const row = getLinkedInPendingPostForChat(id, chatId);
+        if (!row || row.status !== 'pending') {
+            await ctx.reply(`No existe la propuesta #${id} en estado pendiente para este chat.`);
+            return;
+        }
+        await ctx.reply('⏳ Publicando en LinkedIn…');
+        try {
+            const result = await publishLinkedInTextPost(
+                row.body,
+                row.visibility === 'CONNECTIONS' ? 'CONNECTIONS' : 'PUBLIC'
+            );
+            const ref = result.restLiId ?? result.rawBody ?? 'ok';
+            setLinkedInPendingPublished(id, ref);
+            const msg = result.restLiId
+                ? `✅ Publicado en LinkedIn.\nRef: \`${result.restLiId}\``
+                : `✅ Publicado en LinkedIn.`;
+            await ctx.reply(msg, { parse_mode: 'Markdown' });
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            setLinkedInPendingFailed(id, msg);
+            await ctx.reply(`❌ Error al publicar: ${msg}`);
+        }
+    });
+
+    bot.command('li_reject', async (ctx) => {
+        const chatId = String(ctx.chat.id);
+        const text = ctx.message?.text ?? '';
+        const id = parseLiCommandId(text, 'li_reject');
+        if (id == null || !Number.isFinite(id)) {
+            await ctx.reply('Uso: /li_reject NUMERO');
+            return;
+        }
+        const row = getLinkedInPendingPostForChat(id, chatId);
+        if (!row || row.status !== 'pending') {
+            await ctx.reply(`No existe la propuesta #${id} pendiente.`);
+            return;
+        }
+        setLinkedInPendingRejected(id);
+        await ctx.reply(`🛑 Propuesta #${id} rechazada. No se ha publicado nada en LinkedIn.`);
     });
 
     // ── Main message handler ──────────────────────────────────────────────────
@@ -251,6 +333,14 @@ function isReadLastAudioRequest(text: string): boolean {
         normalized === 'muestra la transcripcion' ||
         normalized === 'repite la transcripcion'
     );
+}
+
+function parseLiCommandId(text: string, command: string): number | null {
+    const trimmed = text.trim();
+    const re = new RegExp(`^/${command}(?:@\\S+)?\\s+(\\d+)\\s*$`, 'i');
+    const m = trimmed.match(re);
+    if (!m) return null;
+    return parseInt(m[1], 10);
 }
 
 function isAudioCapabilityQuestion(text: string): boolean {

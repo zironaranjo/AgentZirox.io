@@ -1,9 +1,14 @@
 import { mkdir, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { registerTool } from '../core/dispatcher';
+import { insertLinkedInPendingPost } from '../core/memory';
+import { getToolContext } from '../core/tool-context';
+import { isLinkedInOAuthConfigured } from '../integrations/linkedin/linkedin-api';
 import { getWorkspaceBaseDir, resolveSafeWorkspacePath } from './workspace-utils';
 
 const DRAFTS_DIR = 'linkedin/drafts';
+/** Límite aproximado de caracteres para un post de texto en el feed de LinkedIn. */
+const LINKEDIN_POST_MAX_CHARS = 2900;
 
 function slugify(input: string, maxLen: number): string {
     const s = input
@@ -97,7 +102,83 @@ registerTool({
             `📁 Base: ${getWorkspaceBaseDir()}`,
             `📄 ${relativePath}`,
             '',
-            'Puedes abrir el archivo en el VPS o pedir read_file con esa ruta. Para publicar en LinkedIn, copia el texto desde el archivo (LinkedIn no esta conectado por API en este agente).',
+            'Puedes abrir el archivo en el VPS o pedir read_file con esa ruta. Si tienes OAuth LinkedIn configurado, para publicar con tu aprobacion usa linkedin_propose_post y luego /li_approve en Telegram.',
+        ].join('\n');
+    },
+});
+
+registerTool({
+    name: 'linkedin_propose_post',
+    description:
+        'Proponer una PUBLICACION de LinkedIn (feed) para que el usuario la apruebe antes de subirla. OBLIGATORIO para publicar automaticamente: nunca digas que ya esta publicado hasta que el usuario ejecute /li_approve ID en Telegram. El texto debe ser el definitivo (sin markdown de Telegram). visibility PUBLIC = cualquiera; CONNECTIONS = solo 1er grado.',
+    parameters: {
+        type: 'object',
+        properties: {
+            post_text: {
+                type: 'string',
+                description: 'Texto final del post (sin envolver en comillas extras). Maximo ~2900 caracteres.',
+            },
+            visibility: {
+                type: 'string',
+                enum: ['PUBLIC', 'CONNECTIONS'],
+                description: 'PUBLIC (recomendado para alcance) o CONNECTIONS (solo tu red cercana)',
+            },
+        },
+        required: ['post_text'],
+    },
+    handler: async (args) => {
+        const { post_text, visibility: visRaw } = args as {
+            post_text: string;
+            visibility?: string;
+        };
+
+        const tctx = getToolContext();
+        if (!tctx?.chatId) {
+            throw new Error(
+                'linkedin_propose_post solo esta disponible cuando hay un chat vinculado (p. ej. Telegram). Desde la web usa linkedin_save_draft.'
+            );
+        }
+
+        if (!isLinkedInOAuthConfigured()) {
+            return [
+                '⚠️ LinkedIn OAuth no esta configurado en el servidor.',
+                'Configura LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET y LINKEDIN_REFRESH_TOKEN (ver README).',
+                'Mientras tanto puedes usar linkedin_save_draft para guardar el texto en el workspace.',
+            ].join('\n');
+        }
+
+        const text = post_text.trim();
+        if (!text) {
+            throw new Error('post_text vacio');
+        }
+        if (text.length > LINKEDIN_POST_MAX_CHARS) {
+            throw new Error(
+                `Post demasiado largo (${text.length} caracteres). Acorta a ${LINKEDIN_POST_MAX_CHARS} o menos.`
+            );
+        }
+
+        const visibility = visRaw === 'CONNECTIONS' ? 'CONNECTIONS' : 'PUBLIC';
+        const id = insertLinkedInPendingPost(tctx.chatId, text, visibility);
+
+        const preview = text.length > 600 ? `${text.slice(0, 600)}…` : text;
+
+        return [
+            `📋 **Publicacion LinkedIn pendiente de tu aprobacion** — id \`${id}\``,
+            `Visibilidad: **${visibility}**`,
+            '',
+            '---',
+            preview,
+            '---',
+            '',
+            'Cuando quieras **publicar de verdad** en LinkedIn, en este chat ejecuta:',
+            `\`/li_approve ${id}\``,
+            '',
+            'Para cancelar:',
+            `\`/li_reject ${id}\``,
+            '',
+            'Para ver todas las pendientes: `/li_pending`',
+            '',
+            'Hasta que apruebes, **no** se llama a la API de LinkedIn.',
         ].join('\n');
     },
 });

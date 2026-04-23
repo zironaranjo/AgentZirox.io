@@ -65,6 +65,30 @@ npm run dev
 | `drive_archive_important_emails` | Crear carpeta + guardar correos importantes en un paso |
 | `linkedin_save_draft` | Guardar borrador de LinkedIn (post, titular, Acerca de, etc.) en `linkedin/drafts/*.md` |
 | `linkedin_list_drafts` | Listar borradores recientes en el workspace |
+| `linkedin_propose_post` | Encola un post para el feed; **no publica** hasta que apruebes en Telegram (`/li_approve ID`) |
+| *(Telegram)* `/li_pending` | Ver posts encolados pendientes de aprobación |
+| *(Telegram)* `/li_approve N` | Publicar en LinkedIn la propuesta `N` (API oficial) |
+| *(Telegram)* `/li_reject N` | Descartar la propuesta `N` |
+
+## LinkedIn (publicación con tu aprobación)
+
+1. Crea una app en [LinkedIn Developers](https://www.linkedin.com/developers/apps) y verifica la app (página de empresa si la pide LinkedIn).
+2. En la pestaña **Productos**, añade **Share on LinkedIn** y **Sign In with LinkedIn using OpenID Connect**.
+3. En **Auth**, configura redirect URL (la misma que uses en tu flujo OAuth local/script) y anota **Client ID** y **Client Secret**.
+4. Obtén un **authorization code** con scopes: `openid`, `profile`, `w_member_social` (y `offline_access` / refresh si tu flujo lo soporta para token de refresco programático).
+5. Intercambia el code por **access_token** y **refresh_token**; guarda el refresh en `LINKEDIN_REFRESH_TOKEN`.
+6. Variables en `.env`:
+
+```env
+LINKEDIN_CLIENT_ID=...
+LINKEDIN_CLIENT_SECRET=...
+LINKEDIN_REFRESH_TOKEN=...
+# Opcional si userinfo falla: LINKEDIN_PERSON_URN=urn:li:person:XXXX
+```
+
+**Flujo:** el agente llama a `linkedin_propose_post` → recibes en Telegram el **ID** → revisas el texto → `/li_approve ID` publica vía `https://api.linkedin.com/v2/ugcPosts`. Sin ese comando **no** se llama a la API de publicación.
+
+Los límites y políticas de LinkedIn aplican (cuotas, moderación, tipo de cuenta). Solo posts de **texto** en esta integración; imágenes/enlaces en UGC requieren pasos extra.
 
 ## Workspace operativo (clientes y redes)
 
