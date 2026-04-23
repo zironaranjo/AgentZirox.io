@@ -1,4 +1,4 @@
-import { registerTool, listTools } from '../core/dispatcher.js';
+import { registerTool, listTools } from '../core/dispatcher';
 
 registerTool({
     name: 'list_tools',

@@ -1,5 +1,5 @@
-import { registerTool } from '../core/dispatcher.js';
-import { appendUserProfileNote, setUserDisplayName } from '../core/memory.js';
+import { registerTool } from '../core/dispatcher';
+import { appendUserProfileNote, setUserDisplayName } from '../core/memory';
 
 registerTool({
     name: 'remember_about_user',

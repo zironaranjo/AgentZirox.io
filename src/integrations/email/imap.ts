@@ -1,5 +1,5 @@
 import { ImapFlow } from 'imapflow';
-import { logger } from '../../core/logger.js';
+import { logger } from '../../core/logger';
 
 export interface EmailMessage {
     uid: number;

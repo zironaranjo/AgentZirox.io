@@ -1,5 +1,5 @@
-import { registerTool } from '../core/dispatcher.js';
-import { readInbox } from '../integrations/email/imap.js';
+import { registerTool } from '../core/dispatcher';
+import { readInbox } from '../integrations/email/imap';
 
 registerTool({
     name: 'read_inbox',

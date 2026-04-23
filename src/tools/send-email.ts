@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import { registerTool } from '../core/dispatcher.js';
+import { registerTool } from '../core/dispatcher';
 
 registerTool({
     name: 'send_email',

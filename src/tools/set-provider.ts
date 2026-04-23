@@ -1,4 +1,4 @@
-import { registerTool } from '../core/dispatcher.js';
+import { registerTool } from '../core/dispatcher';
 
 registerTool({
     name: 'set_provider',

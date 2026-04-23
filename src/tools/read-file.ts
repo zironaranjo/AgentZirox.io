@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { registerTool } from '../core/dispatcher.js';
-import { getWorkspaceBaseDir, resolveSafeWorkspacePath } from './workspace-utils.js';
+import { registerTool } from '../core/dispatcher';
+import { getWorkspaceBaseDir, resolveSafeWorkspacePath } from './workspace-utils';
 
 registerTool({
     name: 'read_file',

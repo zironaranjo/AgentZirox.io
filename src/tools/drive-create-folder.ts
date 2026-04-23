@@ -1,5 +1,5 @@
-import { registerTool } from '../core/dispatcher.js';
-import { createDriveFolder } from '../integrations/google/google.js';
+import { registerTool } from '../core/dispatcher';
+import { createDriveFolder } from '../integrations/google/google';
 
 registerTool({
     name: 'drive_create_folder',

@@ -1,8 +1,8 @@
 import { Bot, type Context } from 'grammy';
-import { processMessage } from '../../core/agent.js';
-import { clearHistory } from '../../core/memory.js';
-import { listTools } from '../../core/dispatcher.js';
-import { logger } from '../../core/logger.js';
+import { processMessage } from '../../core/agent';
+import { clearHistory } from '../../core/memory';
+import { listTools } from '../../core/dispatcher';
+import { logger } from '../../core/logger';
 
 const lastTranscriptionByChat = new Map<string, string>();
 

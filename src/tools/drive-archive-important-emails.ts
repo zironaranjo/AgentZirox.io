@@ -1,5 +1,5 @@
-import { registerTool } from '../core/dispatcher.js';
-import { archiveImportantEmailsByFolderName } from '../integrations/google/google.js';
+import { registerTool } from '../core/dispatcher';
+import { archiveImportantEmailsByFolderName } from '../integrations/google/google';
 
 registerTool({
     name: 'drive_archive_important_emails',

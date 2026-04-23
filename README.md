@@ -57,6 +57,9 @@ npm run dev
 | `create_client_workspace` | Crear estructura base de cliente con plantillas |
 | `capture_note` | Captura rapida de ideas/notas en `capturas/*.md` con fecha |
 | `remember_about_user` | Guarda nombre preferido y gustos en SQLite; se inyectan en el system prompt en cada mensaje |
+| `schedule_task` | Programa una acción futura en este chat (requiere cron en servidor, ver abajo) |
+| `list_scheduled_tasks` | Lista tareas pendientes del chat |
+| `cancel_scheduled_task` | Cancela una tarea pendiente por id |
 | `drive_create_folder` | Crear carpetas en Google Drive con OAuth2 |
 | `drive_save_important_emails` | Guardar correos importantes de Gmail en Drive |
 | `drive_archive_important_emails` | Crear carpeta + guardar correos importantes en un paso |
@@ -74,9 +77,23 @@ Para captura rapida de ideas, el agente puede usar `capture_note` y guardar en `
 
 Perfil persistente: configura `USER_DISPLAY_NAME` y/o `USER_PROFILE` en el entorno, o deja que el usuario lo diga en el chat; el agente puede usar `remember_about_user` para guardar nombre y preferencias (tabla `metadata` en `agent_memory.db`). `clear_memory` solo borra el historial del chat, no el perfil.
 
+### Tareas programadas (recordatorios)
+
+Sin esto, el agente **no puede** cumplir solo “mañana a las 8” aunque lo prometa: hace falta **persistencia + un cron**.
+
+1. `SCHEDULED_TASKS_ENABLED=true`
+2. Un secreto: `CRON_SECRET` (recomendado) o `SELF_IMPROVE_CRON_SECRET` (mismo valor sirve para todos los crons).
+3. En Dokploy, **cada 1–2 minutos**, GET o POST a:
+
+`https://TU_DOMINIO/api/cron/scheduled-tasks`
+
+Cabecera: `Authorization: Bearer TU_SECRETO`.
+
+Cuando pidas un recordatorio en Telegram, el modelo debe usar **`schedule_task`** (con `run_at_iso` en ISO con offset de España, ej. `2026-04-23T08:00:00+02:00`). Comandos útiles: tools `list_scheduled_tasks` / `cancel_scheduled_task`.
+
 ### Auto-mejora diaria (cron)
 
-Con `SELF_IMPROVE_ENABLED=true` y un `SELF_IMPROVE_CRON_SECRET` largo, puedes programar **una petición al día** (GET o POST) a:
+Con `SELF_IMPROVE_ENABLED=true` y `CRON_SECRET` o `SELF_IMPROVE_CRON_SECRET` largo, puedes programar **una petición al día** (GET o POST) a:
 
 `https://TU_DOMINIO/api/cron/self-improve`
 

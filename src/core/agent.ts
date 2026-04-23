@@ -1,16 +1,21 @@
-import { callLLM, type ChatMessage } from './llm.js';
-import { getHistory, saveMessage } from './memory.js';
-import { getToolDefinitions, executeTool } from './dispatcher.js';
-import { logger } from './logger.js';
+import { callLLM, type ChatMessage } from './llm';
+import { getHistory, saveMessage } from './memory';
+import { getToolDefinitions, executeTool } from './dispatcher';
+import { logger } from './logger';
+import { runWithToolContext } from './tool-context';
 
 // Bootstrap all tools on first import
-import '../tools/index.js';
+import '../tools/index';
 
 /**
  * Main agent loop: processes a user message and returns the assistant's response.
  * Handles multi-step tool calling automatically.
  */
 export async function processMessage(chatId: string, userMessage: string): Promise<string> {
+    return runWithToolContext({ chatId }, () => processMessageInner(chatId, userMessage));
+}
+
+async function processMessageInner(chatId: string, userMessage: string): Promise<string> {
     // Persist the user message
     saveMessage(chatId, 'user', userMessage);
 
@@ -59,3 +64,4 @@ export async function processMessage(chatId: string, userMessage: string): Promi
     saveMessage(chatId, 'assistant', finalContent);
     return finalContent;
 }
+

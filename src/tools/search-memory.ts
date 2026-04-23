@@ -1,5 +1,5 @@
-import { registerTool } from '../core/dispatcher.js';
-import { getHistory } from '../core/memory.js';
+import { registerTool } from '../core/dispatcher';
+import { getHistory } from '../core/memory';
 
 registerTool({
     name: 'search_memory',

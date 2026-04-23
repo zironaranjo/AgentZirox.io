@@ -2,12 +2,12 @@ import 'dotenv/config';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { initMemory } from '../core/memory.js';
-import { executeTool } from '../core/dispatcher.js';
-import { processMessage } from '../core/agent.js';
+import { initMemory } from '../core/memory';
+import { executeTool } from '../core/dispatcher';
+import { processMessage } from '../core/agent';
 
 // Bootstrap all tools
-import '../tools/index.js';
+import '../tools/index';
 
 async function main() {
     await initMemory();

@@ -48,7 +48,7 @@ export type DailySelfImproveResult =
  * Debe llamarse como máximo una vez por día (calendario Europe/Madrid); control por metadata.
  */
 export async function runDailySelfImprove(authToken: string | null): Promise<DailySelfImproveResult> {
-    const secret = process.env.SELF_IMPROVE_CRON_SECRET?.trim();
+    const secret = (process.env.CRON_SECRET ?? process.env.SELF_IMPROVE_CRON_SECRET ?? '').trim();
     if (!selfImproveEnabled()) {
         return { status: 'disabled' };
     }

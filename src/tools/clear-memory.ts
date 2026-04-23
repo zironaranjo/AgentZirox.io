@@ -1,5 +1,5 @@
-import { registerTool } from '../core/dispatcher.js';
-import { clearHistory } from '../core/memory.js';
+import { registerTool } from '../core/dispatcher';
+import { clearHistory } from '../core/memory';
 
 registerTool({
     name: 'clear_memory',

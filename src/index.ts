@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import { startTelegramBot } from './integrations/telegram/bot.js';
-import { initMemory } from './core/memory.js';
-import { logger } from './core/logger.js';
+import { startTelegramBot } from './integrations/telegram/bot';
+import { initMemory } from './core/memory';
+import { logger } from './core/logger';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';

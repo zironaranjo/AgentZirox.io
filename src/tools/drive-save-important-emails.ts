@@ -1,5 +1,5 @@
-import { registerTool } from '../core/dispatcher.js';
-import { saveImportantEmailsToDrive } from '../integrations/google/google.js';
+import { registerTool } from '../core/dispatcher';
+import { saveImportantEmailsToDrive } from '../integrations/google/google';
 
 registerTool({
     name: 'drive_save_important_emails',

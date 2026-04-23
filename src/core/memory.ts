@@ -24,6 +24,16 @@ export async function initMemory(): Promise<void> {
       value TEXT NOT NULL,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS scheduled_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      instruction TEXT NOT NULL,
+      run_at_ms INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'done', 'failed')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_sched_due ON scheduled_tasks(status, run_at_ms);
   `);
 }
 
@@ -155,4 +165,79 @@ export function appendUserProfileNote(note: string): void {
         next = next.slice(next.length - USER_PROFILE_MAX_CHARS);
     }
     setMeta(META_USER_PROFILE, next);
+}
+
+export type ScheduledTaskRow = {
+    id: number;
+    chat_id: string;
+    instruction: string;
+    run_at_ms: number;
+    status: string;
+    created_at: string;
+};
+
+export function insertScheduledTask(chatId: string, instruction: string, runAtMs: number): number {
+    const r = getDb()
+        .prepare(
+            `INSERT INTO scheduled_tasks (chat_id, instruction, run_at_ms, status) VALUES (?, ?, ?, 'pending')`
+        )
+        .run(chatId, instruction, runAtMs);
+    return Number(r.lastInsertRowid);
+}
+
+export function listPendingScheduledForChat(chatId: string): ScheduledTaskRow[] {
+    return getDb()
+        .prepare(
+            `SELECT id, chat_id, instruction, run_at_ms, status, created_at FROM scheduled_tasks
+             WHERE chat_id = ? AND status = 'pending' ORDER BY run_at_ms ASC`
+        )
+        .all(chatId) as ScheduledTaskRow[];
+}
+
+/** Atomically toma la siguiente tarea vencida o null. */
+export function claimNextDueScheduledTask(nowMs: number): ScheduledTaskRow | null {
+    const database = getDb();
+    const txn = database.transaction(() => {
+        const row = database
+            .prepare(
+                `SELECT id, chat_id, instruction, run_at_ms, status, created_at FROM scheduled_tasks
+                 WHERE status = 'pending' AND run_at_ms <= ? ORDER BY run_at_ms ASC LIMIT 1`
+            )
+            .get(nowMs) as ScheduledTaskRow | undefined;
+        if (!row) return null;
+        const upd = database
+            .prepare(`UPDATE scheduled_tasks SET status = 'running' WHERE id = ? AND status = 'pending'`)
+            .run(row.id);
+        if (upd.changes !== 1) return null;
+        return row;
+    });
+    return txn();
+}
+
+export function markScheduledTaskDone(id: number): void {
+    getDb().prepare(`UPDATE scheduled_tasks SET status = 'done' WHERE id = ?`).run(id);
+}
+
+export function markScheduledTaskFailed(id: number): void {
+    getDb().prepare(`UPDATE scheduled_tasks SET status = 'failed' WHERE id = ?`).run(id);
+}
+
+/** Devuelve a pending tareas "running" cuya hora de ejecución era hace más de maxAgeMs (tareas colgadas). */
+export function releaseStuckRunningTasks(nowMs: number, maxAgeMs: number): number {
+    const cutoff = nowMs - maxAgeMs;
+    const r = getDb()
+        .prepare(
+            `UPDATE scheduled_tasks SET status = 'pending' WHERE status = 'running' AND run_at_ms < ?`
+        )
+        .run(cutoff);
+    return r.changes;
+}
+
+export function cancelScheduledTaskForChat(chatId: string, taskId: number): boolean {
+    const r = getDb()
+        .prepare(
+            `DELETE FROM scheduled_tasks WHERE id = ? AND chat_id = ? AND status = 'pending'`
+        )
+        .run(taskId, chatId);
+    return r.changes === 1;
 }
