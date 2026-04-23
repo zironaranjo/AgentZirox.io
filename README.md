@@ -108,9 +108,9 @@ OPENROUTER_TOOLS_MODEL=anthropic/claude-3.5-sonnet
 OPENROUTER_VISION_MODEL=openai/gpt-4o-mini
 ```
 
-## Google Drive + Gmail
+## Google Drive + Gmail + Sheets + Calendar
 
-Para crear carpetas en Drive y guardar correos importantes, configura OAuth2 en `.env`:
+Configura OAuth2 en `.env` (mismas credenciales para todos):
 
 ```env
 GOOGLE_CLIENT_ID=...
@@ -119,6 +119,26 @@ GOOGLE_REFRESH_TOKEN=...
 GOOGLE_REDIRECT_URI=http://localhost:3000/oauth2callback
 GOOGLE_DRIVE_ROOT_FOLDER_ID=
 ```
+
+### Activar APIs y permisos
+
+En [Google Cloud Console](https://console.cloud.google.com/) del proyecto:
+
+1. **APIs y servicios → Biblioteca**: habilita **Google Sheets API** y **Google Calendar API** (además de Drive/Gmail si ya los usas).
+2. **Pantalla de consentimiento OAuth**: añade los ámbitos (scopes):
+   - `https://www.googleapis.com/auth/spreadsheets`
+   - `https://www.googleapis.com/auth/calendar.events`  
+   (y los que ya tengas para Drive/Gmail, p. ej. `drive.file`, `gmail.readonly`).
+3. **Vuelve a generar un `GOOGLE_REFRESH_TOKEN`** con todos esos scopes (OAuth 2.0 Playground, script o flujo local). El token antiguo **no** incluye permisos nuevos hasta que reautorices.
+
+### Herramientas del agente
+
+| Tool | Uso |
+|------|-----|
+| `google_sheets_read` | Leer rango A1 de un spreadsheet (ID en la URL) |
+| `google_sheets_write` | Escribir filas (JSON de arrays) |
+| `google_calendar_list_events` | Eventos entre `time_min_iso` y `time_max_iso` |
+| `google_calendar_create_event` | Crear evento con título e inicio/fin ISO |
 
 ## MCP Server
 

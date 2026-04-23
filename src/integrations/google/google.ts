@@ -151,3 +151,95 @@ export async function archiveImportantEmailsByFolderName(
         files: saved.files,
     };
 }
+
+// ── Google Sheets ───────────────────────────────────────────────────────────
+
+export async function sheetsGetValues(spreadsheetId: string, rangeA1: string): Promise<string[][]> {
+    const auth = getGoogleAuthClient();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const res = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: rangeA1,
+    });
+    return (res.data.values as string[][]) ?? [];
+}
+
+export async function sheetsUpdateValues(
+    spreadsheetId: string,
+    rangeA1: string,
+    values: string[][]
+): Promise<{ updatedRows: number; updatedColumns: number; updatedCells: number }> {
+    const auth = getGoogleAuthClient();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const res = await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: rangeA1,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values },
+    });
+    const updated = res.data.updatedRows ?? 0;
+    const cols = res.data.updatedColumns ?? 0;
+    const cells = res.data.updatedCells ?? 0;
+    return { updatedRows: updated, updatedColumns: cols, updatedCells: cells };
+}
+
+// ── Google Calendar ─────────────────────────────────────────────────────────
+
+export interface CalendarEventBrief {
+    id: string;
+    summary: string;
+    start?: string;
+    end?: string;
+    htmlLink?: string;
+}
+
+export async function calendarListEvents(
+    timeMinIso: string,
+    timeMaxIso: string,
+    maxResults: number,
+    calendarId = 'primary'
+): Promise<CalendarEventBrief[]> {
+    const auth = getGoogleAuthClient();
+    const calendar = google.calendar({ version: 'v3', auth });
+    const res = await calendar.events.list({
+        calendarId,
+        timeMin: timeMinIso,
+        timeMax: timeMaxIso,
+        maxResults: Math.min(Math.max(maxResults, 1), 100),
+        singleEvents: true,
+        orderBy: 'startTime',
+    });
+
+    const items = res.data.items ?? [];
+    return items
+        .filter((e) => e.id)
+        .map((e) => ({
+            id: e.id!,
+            summary: e.summary ?? '(sin título)',
+            start: (e.start?.dateTime ?? e.start?.date) ?? undefined,
+            end: (e.end?.dateTime ?? e.end?.date) ?? undefined,
+            htmlLink: e.htmlLink ?? undefined,
+        }));
+}
+
+export async function calendarCreateEvent(
+    calendarId: string,
+    summary: string,
+    startIso: string,
+    endIso: string,
+    description?: string
+): Promise<{ id: string; htmlLink?: string }> {
+    const auth = getGoogleAuthClient();
+    const calendar = google.calendar({ version: 'v3', auth });
+    const res = await calendar.events.insert({
+        calendarId,
+        requestBody: {
+            summary,
+            description: description?.trim() || undefined,
+            start: { dateTime: startIso },
+            end: { dateTime: endIso },
+        },
+    });
+    if (!res.data.id) throw new Error('Calendar API no devolvió id del evento');
+    return { id: res.data.id, htmlLink: res.data.htmlLink ?? undefined };
+}
