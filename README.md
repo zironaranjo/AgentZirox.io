@@ -75,14 +75,24 @@ npm run dev
 1. Crea una app en [LinkedIn Developers](https://www.linkedin.com/developers/apps) y verifica la app (página de empresa si la pide LinkedIn).
 2. En la pestaña **Productos**, añade **Share on LinkedIn** y **Sign In with LinkedIn using OpenID Connect**.
 3. En **Auth**, configura redirect URL (la misma que uses en tu flujo OAuth local/script) y anota **Client ID** y **Client Secret**.
-4. Obtén un **authorization code** con scopes: `openid`, `profile`, `w_member_social` (y `offline_access` / refresh si tu flujo lo soporta para token de refresco programático).
-5. Intercambia el code por **access_token** y **refresh_token**; guarda el refresh en `LINKEDIN_REFRESH_TOKEN`.
-6. Variables en `.env`:
+4. Obtén un **authorization code** con scopes: `openid`, `profile`, `w_member_social`.
+5. Intercambia el `code` por tokens (POST `https://www.linkedin.com/oauth/v2/accessToken`). Muchas apps reciben solo **`access_token`** y **`expires_in`** (p. ej. ~60 días) **sin** `refresh_token`. Eso es válido.
+6. Variables en `.env` — **elige una opción:**
+
+**Opción A (refresh token):** si el JSON incluye `refresh_token`, usa `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_REFRESH_TOKEN`.
+
+**Opción B (solo access token):** pega el `access_token` en `LINKEDIN_ACCESS_TOKEN`. Opcional: `LINKEDIN_ACCESS_TOKEN_EXPIRES_AT_MS` = instante de caducidad en milisegundos Unix (al obtener el token: `Date.now() + expires_in * 1000` en consola del navegador o Node) para que el agente avise cuando toque renovar.
 
 ```env
+# A — con refresh
 LINKEDIN_CLIENT_ID=...
 LINKEDIN_CLIENT_SECRET=...
 LINKEDIN_REFRESH_TOKEN=...
+
+# B — sin refresh (muy habitual en LinkedIn)
+# LINKEDIN_ACCESS_TOKEN=...
+# LINKEDIN_ACCESS_TOKEN_EXPIRES_AT_MS=...
+
 # Opcional si userinfo falla: LINKEDIN_PERSON_URN=urn:li:person:XXXX
 ```
 

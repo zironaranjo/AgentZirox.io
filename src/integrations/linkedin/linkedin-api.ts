@@ -8,7 +8,21 @@ const META_PERSON_URN = 'linkedin_person_urn';
 
 let accessTokenCache: { token: string; expiresAtMs: number } | null = null;
 
+function parseExpiresAtMsFromEnv(): number | null {
+    const raw = process.env.LINKEDIN_ACCESS_TOKEN_EXPIRES_AT_MS?.trim();
+    if (!raw) return null;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * OAuth listo si hay access token estático (LinkedIn a veces no devuelve refresh_token)
+ * o si hay client_id + secret + refresh_token.
+ */
 export function isLinkedInOAuthConfigured(): boolean {
+    if (process.env.LINKEDIN_ACCESS_TOKEN?.trim()) {
+        return true;
+    }
     return Boolean(
         process.env.LINKEDIN_CLIENT_ID?.trim() &&
             process.env.LINKEDIN_CLIENT_SECRET?.trim() &&
@@ -80,6 +94,17 @@ async function refreshAccessToken(): Promise<string> {
 }
 
 export async function getLinkedInAccessToken(): Promise<string> {
+    const staticToken = process.env.LINKEDIN_ACCESS_TOKEN?.trim();
+    if (staticToken) {
+        const exp = parseExpiresAtMsFromEnv();
+        if (exp != null && Date.now() >= exp - 120_000) {
+            throw new Error(
+                'LinkedIn: LINKEDIN_ACCESS_TOKEN caducado. Ejecuta de nuevo el flujo OAuth (code → accessToken) y actualiza .env; ver README.'
+            );
+        }
+        return staticToken;
+    }
+
     if (accessTokenCache && Date.now() < accessTokenCache.expiresAtMs - 120_000) {
         return accessTokenCache.token;
     }
