@@ -79,17 +79,15 @@ Perfil persistente: configura `USER_DISPLAY_NAME` y/o `USER_PROFILE` en el entor
 
 ### Tareas programadas (recordatorios)
 
-Sin esto, el agente **no puede** cumplir solo “mañana a las 8” aunque lo prometa: hace falta **persistencia + un cron**.
+Sin esto, el agente **no puede** cumplir solo “mañana a las 8” aunque lo prometa: hace falta **persistencia** y que algo **ejecute** las tareas vencidas.
 
 1. `SCHEDULED_TASKS_ENABLED=true`
-2. Un secreto: `CRON_SECRET` (recomendado) o `SELF_IMPROVE_CRON_SECRET` (mismo valor sirve para todos los crons).
-3. En Dokploy, **cada 1–2 minutos**, GET o POST a:
+2. Arranca la app con **`npm start`** / **`tsx server.ts`** (no solo `next start` aislado): el servidor incluye un **ticker interno** que cada **60 s** (configurable) llama a la misma lógica que el cron HTTP. Así no dependes obligatoriamente de Dokploy para las tareas.
+3. Opcional: `SCHEDULED_TASKS_INTERNAL_TICKER=false` si quieres **solo** disparos externos.
+4. Opcional: `SCHEDULED_TASKS_TICK_MS=60000` (mínimo 15000, máximo 300000).
+5. Cron HTTP (redundante o si desactivas el ticker interno): GET/POST a `https://TU_DOMINIO/api/cron/scheduled-tasks` con `Authorization: Bearer` = `CRON_SECRET` o `SELF_IMPROVE_CRON_SECRET`.
 
-`https://TU_DOMINIO/api/cron/scheduled-tasks`
-
-Cabecera: `Authorization: Bearer TU_SECRETO`.
-
-Cuando pidas un recordatorio en Telegram, el modelo debe usar **`schedule_task`** (con `run_at_iso` en ISO con offset de España, ej. `2026-04-23T08:00:00+02:00`). Comandos útiles: tools `list_scheduled_tasks` / `cancel_scheduled_task`.
+Cuando pidas un recordatorio en Telegram, el modelo debe usar **`schedule_task`** (con `run_at_iso` en ISO con offset de España, ej. `2026-04-23T08:00:00+02:00`). Herramientas: `list_scheduled_tasks` / `cancel_scheduled_task`.
 
 ### Auto-mejora diaria (cron)
 

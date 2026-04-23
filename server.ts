@@ -6,6 +6,7 @@ import next from "next";
 import './src/core/logger';
 import { logger } from './src/core/logger';
 import { initMemory } from './src/core/memory';
+import { startScheduledTasksTicker } from './src/core/process-scheduled';
 import { startTelegramBot } from './src/integrations/telegram/bot';
 
 const dev = process.env.NODE_ENV !== "production";
@@ -47,6 +48,8 @@ app.prepare().then(async () => {
     })
     .listen(port, () => {
       logger.info(`🚀 Next.js is online at http://${hostname}:${port}`);
+
+      startScheduledTasksTicker();
 
       // 3. Start Telegram bot IN BACKGROUND (fire-and-forget)
       // bot.start() is infinite polling — never awaited so it doesn't block
