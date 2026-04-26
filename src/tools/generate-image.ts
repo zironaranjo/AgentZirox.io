@@ -4,6 +4,8 @@ import { registerTool } from '../core/dispatcher';
 import { getToolContext } from '../core/tool-context';
 import { resolveSafeWorkspacePath } from './workspace-utils';
 
+const KIE_BASE = 'https://api.kie.ai';
+
 /** URL temporal para que Telegram envíe la foto tras processMessage (mismo chat). */
 const pendingTelegramImageUrl = new Map<string, string>();
 
@@ -13,23 +15,55 @@ export function consumePendingTelegramImageUrl(chatId: string): string | undefin
     return u;
 }
 
-function getImageApiKey(): string {
+function sleep(ms: number): Promise<void> {
+    return new Promise((r) => setTimeout(r, ms));
+}
+
+type ImageProvider = 'openai' | 'kie';
+
+function resolveImageProvider(): ImageProvider {
+    const forced = process.env.IMAGE_GENERATION_PROVIDER?.trim().toLowerCase();
+    if (forced === 'kie') return 'kie';
+    if (forced === 'openai') return 'openai';
+
+    if (process.env.KIE_API_KEY?.trim()) return 'kie';
+    if (
+        process.env.OPENAI_API_KEY?.trim() ||
+        process.env.IMAGE_GENERATION_API_KEY?.trim()
+    ) {
+        return 'openai';
+    }
+    throw new Error(
+        'generate_image: configura KIE_API_KEY (Kie.ai) o OPENAI_API_KEY / IMAGE_GENERATION_API_KEY. Ver README.'
+    );
+}
+
+function getOpenAiKey(): string {
     const k =
         process.env.OPENAI_API_KEY?.trim() ||
         process.env.IMAGE_GENERATION_API_KEY?.trim();
-    if (!k) {
-        throw new Error(
-            'Falta OPENAI_API_KEY o IMAGE_GENERATION_API_KEY para generate_image (ver README).'
-        );
-    }
+    if (!k) throw new Error('Falta OPENAI_API_KEY o IMAGE_GENERATION_API_KEY.');
     return k;
+}
+
+function getKieKey(): string {
+    const k = process.env.KIE_API_KEY?.trim();
+    if (!k) throw new Error('Falta KIE_API_KEY (https://kie.ai/api-key).');
+    return k;
+}
+
+/** Mapea tamaños DALL-E a aspect ratio de Kie 4o Image API. */
+function openAiSizeToKieRatio(size: string): '1:1' | '3:2' | '2:3' {
+    if (size === '1792x1024') return '3:2';
+    if (size === '1024x1792') return '2:3';
+    return '1:1';
 }
 
 async function openAiCreateImage(
     prompt: string,
     size: string
 ): Promise<{ url: string; revised_prompt?: string }> {
-    const apiKey = getImageApiKey();
+    const apiKey = getOpenAiKey();
     const model = (process.env.OPENAI_IMAGE_MODEL ?? 'dall-e-3').trim();
 
     const body: Record<string, unknown> = {
@@ -70,26 +104,110 @@ async function openAiCreateImage(
     return { url, revised_prompt: data.data?.[0]?.revised_prompt };
 }
 
+type KieRecordData = {
+    successFlag: number;
+    errorMessage?: string | null;
+    response?: { result_urls?: string[] } | null;
+    progress?: string | null;
+};
+
+async function kieGenerateImageUrl(prompt: string, kieSize: '1:1' | '3:2' | '2:3'): Promise<string> {
+    const apiKey = getKieKey();
+
+    const genRes = await fetch(`${KIE_BASE}/api/v1/gpt4o-image/generate`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            prompt: prompt.slice(0, 4000),
+            size: kieSize,
+            nVariants: 1,
+        }),
+    });
+
+    const genRaw = await genRes.text();
+    let genJson: { code?: number; msg?: string; data?: { taskId?: string } };
+    try {
+        genJson = JSON.parse(genRaw) as typeof genJson;
+    } catch {
+        throw new Error(`Kie generate no JSON: ${genRaw.slice(0, 400)}`);
+    }
+    if (!genRes.ok || genJson.code !== 200 || !genJson.data?.taskId) {
+        throw new Error(
+            `Kie generate fallo: ${genJson.msg ?? genRes.status} ${genRaw.slice(0, 500)}`
+        );
+    }
+
+    const taskId = genJson.data.taskId;
+    const maxMs = Math.min(
+        600_000,
+        Math.max(30_000, parseInt(process.env.KIE_IMAGE_POLL_MAX_MS ?? '180000', 10) || 180_000)
+    );
+    const intervalMs = Math.min(
+        15_000,
+        Math.max(2000, parseInt(process.env.KIE_IMAGE_POLL_INTERVAL_MS ?? '3000', 10) || 3000)
+    );
+    const start = Date.now();
+
+    while (Date.now() - start < maxMs) {
+        const infoUrl = `${KIE_BASE}/api/v1/gpt4o-image/record-info?taskId=${encodeURIComponent(taskId)}`;
+        const infoRes = await fetch(infoUrl, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        const infoRaw = await infoRes.text();
+        let infoJson: { code?: number; msg?: string; data?: KieRecordData };
+        try {
+            infoJson = JSON.parse(infoRaw) as typeof infoJson;
+        } catch {
+            throw new Error(`Kie record-info no JSON: ${infoRaw.slice(0, 400)}`);
+        }
+        if (!infoRes.ok || infoJson.code !== 200 || !infoJson.data) {
+            throw new Error(`Kie record-info: ${infoJson.msg ?? infoRes.status}`);
+        }
+
+        const d = infoJson.data;
+        if (d.successFlag === 1) {
+            const urls = d.response?.result_urls;
+            const first = urls?.[0];
+            if (!first) throw new Error('Kie termino pero sin result_urls.');
+            return first;
+        }
+        if (d.successFlag === 2) {
+            throw new Error(
+                `Kie generacion fallida: ${d.errorMessage ?? 'sin detalle'}`
+            );
+        }
+        await sleep(intervalMs);
+    }
+
+    throw new Error(
+        `Kie: tiempo de espera agotado (${maxMs} ms) para taskId ${taskId}.`
+    );
+}
+
 registerTool({
     name: 'generate_image',
     description:
-        'Generar una imagen desde una descripcion (ilustracion, banner, concepto visual, meme, etc.). Usa la API de imagenes de OpenAI (DALL-E por defecto). Si el usuario pide crear/dibujar/generar una imagen, llama esta tool con prompt claro.',
+        'Generar una imagen desde una descripcion (ilustracion, banner, meme, etc.). Usa Kie.ai si hay KIE_API_KEY, si no OpenAI DALL-E. Cuando el usuario pida crear/dibujar/generar una imagen, llama esta tool.',
     parameters: {
         type: 'object',
         properties: {
             prompt: {
                 type: 'string',
-                description: 'Que debe mostrar la imagen (estilo, colores, composicion). Puede estar en espanol u ingles.',
+                description: 'Que debe mostrar la imagen (estilo, colores, composicion). Espanol u ingles.',
             },
             size: {
                 type: 'string',
                 enum: ['1024x1024', '1792x1024', '1024x1792'],
-                description: 'Tamano para dall-e-3. Por defecto 1024x1024 si omites.',
+                description:
+                    'Tamano: cuadrado, apaisado o vertical (OpenAI); en Kie se mapea a 1:1 / 3:2 / 2:3.',
             },
             save_relative_path: {
                 type: 'string',
                 description:
-                    'Opcional: guardar PNG en el workspace, ej. imagenes/banner.png (relativo a WORKSPACE_BASE_DIR)',
+                    'Opcional: guardar imagen en el workspace, ej. imagenes/banner.png',
             },
         },
         required: ['prompt'],
@@ -108,7 +226,17 @@ registerTool({
         const size =
             sizeRaw && (allowed as readonly string[]).includes(sizeRaw) ? sizeRaw : '1024x1024';
 
-        const { url, revised_prompt } = await openAiCreateImage(p, size);
+        const provider = resolveImageProvider();
+        let url: string;
+        let revised_prompt: string | undefined;
+
+        if (provider === 'kie') {
+            url = await kieGenerateImageUrl(p, openAiSizeToKieRatio(size));
+        } else {
+            const r = await openAiCreateImage(p, size);
+            url = r.url;
+            revised_prompt = r.revised_prompt;
+        }
 
         const tctx = getToolContext();
         if (tctx?.chatId) {
@@ -126,8 +254,9 @@ registerTool({
             savedLine = `\n📁 Guardado: ${save_relative_path.trim()}`;
         }
 
+        const via = provider === 'kie' ? 'Kie.ai' : 'OpenAI';
         const parts = [
-            '🖼️ Imagen generada.',
+            `🖼️ Imagen generada (${via}).`,
             `🔗 ${url}`,
             revised_prompt ? `\n📝 Prompt revisado: ${revised_prompt}` : '',
             savedLine,
