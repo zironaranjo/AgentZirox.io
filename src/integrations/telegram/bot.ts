@@ -11,6 +11,7 @@ import {
 import { isLinkedInOAuthConfigured, publishLinkedInTextPost } from '../linkedin/linkedin-api';
 import { listTools } from '../../core/dispatcher';
 import { logger } from '../../core/logger';
+import { consumePendingTelegramImageUrl } from '../../tools/generate-image';
 
 const lastTranscriptionByChat = new Map<string, string>();
 
@@ -30,7 +31,7 @@ export async function startTelegramBot() {
             `• 🌐 Llamar cualquier API\n` +
             `• 🔌 Integrar servicios via MCP\n` +
             `• 🎙️ Transcribir notas de voz\n` +
-            `• 🖼️ Analizar imagenes\n` +
+            `• 🖼️ Analizar y generar imagenes\n` +
             `• 💾 Recordar conversaciones anteriores\n` +
             `• 💼 Borradores y publicacion LinkedIn (con tu aprobacion)\n\n` +
             `Solo escríbeme lo que necesitas!\n\n` +
@@ -193,7 +194,7 @@ export async function startTelegramBot() {
 
         try {
             const response = await processMessage(chatId, userText);
-            await sendLongReply(ctx, response);
+            await sendAgentReplyWithOptionalImage(ctx, chatId, response);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             logger.error('Telegram handler error:', msg);
@@ -211,7 +212,7 @@ export async function startTelegramBot() {
             const transcription = await transcribeTelegramFile(ctx, ctx.message.voice.file_id);
             lastTranscriptionByChat.set(chatId, transcription);
             const response = await processMessage(chatId, transcription);
-            await sendLongReply(ctx, response);
+            await sendAgentReplyWithOptionalImage(ctx, chatId, response);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             logger.error('Telegram voice handler error:', msg);
@@ -229,7 +230,7 @@ export async function startTelegramBot() {
             const transcription = await transcribeTelegramFile(ctx, ctx.message.audio.file_id);
             lastTranscriptionByChat.set(chatId, transcription);
             const response = await processMessage(chatId, transcription);
-            await sendLongReply(ctx, response);
+            await sendAgentReplyWithOptionalImage(ctx, chatId, response);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             logger.error('Telegram audio handler error:', msg);
@@ -261,6 +262,19 @@ export async function startTelegramBot() {
     await bot.start({
         onStart: () => logger.info('🤖 Telegram bot is polling...'),
     });
+}
+
+/** Si generate_image dejo URL pendiente para este chat, envia la foto antes del texto. */
+async function sendAgentReplyWithOptionalImage(ctx: Context, chatId: string, response: string) {
+    const imageUrl = consumePendingTelegramImageUrl(chatId);
+    if (imageUrl) {
+        try {
+            await ctx.replyWithPhoto(imageUrl, { caption: '🖼️ Imagen generada' });
+        } catch (e) {
+            logger.warn('No se pudo enviar foto por URL (expira o bloqueo); el texto incluye el enlace.', e);
+        }
+    }
+    await sendLongReply(ctx, response);
 }
 
 async function sendLongReply(ctx: Context, response: string) {

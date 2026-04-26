@@ -45,6 +45,7 @@ npm run dev
 | `read_inbox` | Leer emails del buzón (IMAP) |
 | `call_api` | Llamar cualquier API REST (GET/POST/PUT/DELETE) |
 | `web_search` | Buscar en internet (Serper, Tavily o DuckDuckGo; configura `SERPER_API_KEY` o `TAVILY_API_KEY` para mejores resultados) |
+| `generate_image` | Generar imagen con OpenAI Images API (DALL-E por defecto); requiere `OPENAI_API_KEY`. En Telegram intenta enviar la foto además del enlace |
 | `search_memory` | Buscar en historial de conversación |
 | `clear_memory` | Borrar historial de un chat |
 | `list_tools` | Listar herramientas disponibles |

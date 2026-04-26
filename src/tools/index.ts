@@ -22,3 +22,4 @@ import './drive-save-important-emails';
 import './drive-archive-important-emails';
 import './google-sheets-calendar';
 import './linkedin';
+import './generate-image';
