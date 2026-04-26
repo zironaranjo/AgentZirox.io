@@ -1,138 +1,147 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { logger } from './logger';
+import {
+    initSqliteMemory,
+    sqliteCancelScheduledTaskForChat,
+    sqliteClaimNextDueScheduledTask,
+    sqliteClearHistory,
+    sqliteDbReady,
+    sqliteGetHistory,
+    sqliteGetLinkedInPendingPostForChat,
+    sqliteGetMeta,
+    sqliteGetRecentMessagesAllChats,
+    sqliteInsertLinkedInPendingPost,
+    sqliteInsertScheduledTask,
+    sqliteListLinkedInPendingPostsForChat,
+    sqliteListPendingScheduledForChat,
+    sqliteMarkScheduledTaskDone,
+    sqliteMarkScheduledTaskFailed,
+    sqliteReleaseStuckRunningTasks,
+    sqliteSaveMessage,
+    sqliteSetLinkedInPendingFailed,
+    sqliteSetLinkedInPendingPublished,
+    sqliteSetLinkedInPendingRejected,
+    sqliteSetMeta,
+} from './memory-sqlite';
+import {
+    initSupabaseMemory,
+    supabaseCancelScheduledTaskForChat,
+    supabaseClaimNextDueScheduledTask,
+    supabaseClearHistory,
+    supabaseGetHistory,
+    supabaseGetLinkedInPendingPostForChat,
+    supabaseGetMeta,
+    supabaseGetRecentMessagesAllChats,
+    supabaseInsertLinkedInPendingPost,
+    supabaseInsertScheduledTask,
+    supabaseListLinkedInPendingPostsForChat,
+    supabaseListPendingScheduledForChat,
+    supabaseMarkScheduledTaskDone,
+    supabaseMarkScheduledTaskFailed,
+    supabaseReleaseStuckRunningTasks,
+    supabaseSaveMessage,
+    supabaseSetLinkedInPendingFailed,
+    supabaseSetLinkedInPendingPublished,
+    supabaseSetLinkedInPendingRejected,
+    supabaseSetMeta,
+} from './memory-supabase';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.join(__dirname, '../../agent_memory.db');
+import type { LinkedInPendingRow, ScheduledTaskRow } from './memory-sqlite';
 
-let db: Database.Database | undefined;
+export type { LinkedInPendingRow, ScheduledTaskRow } from './memory-sqlite';
 
+type Backend = 'sqlite' | 'supabase';
+
+let backend: Backend | undefined;
+
+function useSupabaseFromEnv(): boolean {
+    return Boolean(
+        process.env.SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+    );
+}
+
+/**
+ * Inicializa SQLite (por defecto) o Supabase si hay SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.
+ */
 export async function initMemory(): Promise<void> {
-    if (db) return;
-    db = new Database(DB_PATH);
-    db.exec(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      chat_id TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
-      content TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS metadata (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS scheduled_tasks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      chat_id TEXT NOT NULL,
-      instruction TEXT NOT NULL,
-      run_at_ms INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'done', 'failed')),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS idx_sched_due ON scheduled_tasks(status, run_at_ms);
-
-    CREATE TABLE IF NOT EXISTS linkedin_pending_posts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      chat_id TEXT NOT NULL,
-      body TEXT NOT NULL,
-      visibility TEXT NOT NULL DEFAULT 'PUBLIC' CHECK(visibility IN ('PUBLIC', 'CONNECTIONS')),
-      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'rejected', 'published', 'failed')),
-      linkedin_response TEXT,
-      error TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS idx_li_pending_chat ON linkedin_pending_posts(chat_id, status);
-  `);
+    if (backend !== undefined) return;
+    if (useSupabaseFromEnv()) {
+        await initSupabaseMemory();
+        backend = 'supabase';
+        logger.info('[memory] backend: supabase (Postgres)');
+    } else {
+        await initSqliteMemory();
+        backend = 'sqlite';
+        logger.info('[memory] backend: sqlite (agent_memory.db)');
+    }
 }
 
-export function getDb(): Database.Database {
-    if (!db) throw new Error('Memory not initialized. Call initMemory() first.');
-    return db;
+function b(): Backend {
+    if (!backend) throw new Error('Memory not initialized. Call initMemory() first.');
+    return backend;
 }
 
-/**
- * Save a message to the persistent conversation history for a chat
- */
-export function saveMessage(chatId: string, role: 'user' | 'assistant' | 'system', content: string) {
-    const stmt = getDb().prepare(
-        'INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)'
-    );
-    stmt.run(chatId, role, content);
+export async function saveMessage(chatId: string, role: 'user' | 'assistant' | 'system', content: string) {
+    if (b() === 'supabase') return supabaseSaveMessage(chatId, role, content);
+    sqliteSaveMessage(chatId, role, content);
 }
 
-/**
- * Get the recent N messages for a chat (for context window)
- */
-export function getHistory(chatId: string, limit = 20): Array<{ role: string; content: string }> {
-    const rows = getDb()
-        .prepare(
-            'SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT ?'
-        )
-        .all(chatId, limit) as Array<{ role: string; content: string }>;
-    return rows.reverse();
+export async function getHistory(chatId: string, limit = 20): Promise<Array<{ role: string; content: string }>> {
+    if (b() === 'supabase') return supabaseGetHistory(chatId, limit);
+    return sqliteGetHistory(chatId, limit);
 }
 
-/** Mensajes recientes de todos los chats (para resúmenes / auto-mejora). Más recientes al final. */
-export function getRecentMessagesAllChats(limit: number): Array<{ role: string; content: string; created_at: string }> {
-    const rows = getDb()
-        .prepare(
-            `SELECT role, content, created_at FROM messages ORDER BY created_at DESC LIMIT ?`
-        )
-        .all(limit) as Array<{ role: string; content: string; created_at: string }>;
-    return rows.reverse();
+export async function getRecentMessagesAllChats(
+    limit: number
+): Promise<Array<{ role: string; content: string; created_at: string }>> {
+    if (b() === 'supabase') return supabaseGetRecentMessagesAllChats(limit);
+    return sqliteGetRecentMessagesAllChats(limit);
 }
 
-/**
- * Clear conversation history for a chat
- */
-export function clearHistory(chatId: string) {
-    getDb().prepare('DELETE FROM messages WHERE chat_id = ?').run(chatId);
+export async function clearHistory(chatId: string) {
+    if (b() === 'supabase') return supabaseClearHistory(chatId);
+    sqliteClearHistory(chatId);
 }
 
-/**
- * Store arbitrary key-value metadata
- */
-export function setMeta(key: string, value: string) {
-    getDb()
-        .prepare('INSERT OR REPLACE INTO metadata (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)')
-        .run(key, value);
+export async function setMeta(key: string, value: string) {
+    if (key === META_USER_NAME || key === META_USER_PROFILE) {
+        userProfileBlockCache = null;
+    }
+    if (b() === 'supabase') return supabaseSetMeta(key, value);
+    sqliteSetMeta(key, value);
 }
 
-export function getMeta(key: string): string | null {
-    const row = getDb().prepare('SELECT value FROM metadata WHERE key = ?').get(key) as { value: string } | undefined;
-    return row?.value ?? null;
+export async function getMeta(key: string): Promise<string | null> {
+    if (b() === 'supabase') return supabaseGetMeta(key);
+    return sqliteGetMeta(key);
 }
 
 const META_USER_NAME = 'user_display_name';
 const META_USER_PROFILE = 'user_profile';
-/** Límite aproximado de caracteres del perfil acumulado en SQLite (notas del usuario). */
 const USER_PROFILE_MAX_CHARS = 3500;
+const USER_PROFILE_BLOCK_TTL_MS = 60_000;
+
+let userProfileBlockCache: { expiresAtMs: number; value: string } | null = null;
 
 function dbReady(): boolean {
-    try {
-        return Boolean(db);
-    } catch {
-        return false;
-    }
+    if (backend === 'supabase') return true;
+    return sqliteDbReady();
 }
 
 /**
  * Texto para inyectar en el system prompt: nombre preferido + notas (env o metadata).
- * Si la base de datos no está inicializada, solo usa variables de entorno.
  */
-export function getUserProfileBlock(): string {
+export async function getUserProfileBlock(): Promise<string> {
+    if (userProfileBlockCache && Date.now() < userProfileBlockCache.expiresAtMs) {
+        return userProfileBlockCache.value;
+    }
+
     let name = process.env.USER_DISPLAY_NAME?.trim() ?? '';
     let notes = process.env.USER_PROFILE?.trim() ?? '';
 
     if (dbReady()) {
         try {
-            const n = getMeta(META_USER_NAME);
-            const p = getMeta(META_USER_PROFILE);
+            const n = await getMeta(META_USER_NAME);
+            const p = await getMeta(META_USER_PROFILE);
             if (n?.trim()) name = n.trim();
             if (p?.trim()) notes = p.trim();
         } catch {
@@ -140,7 +149,13 @@ export function getUserProfileBlock(): string {
         }
     }
 
-    if (!name && !notes) return '';
+    if (!name && !notes) {
+        userProfileBlockCache = {
+            value: '',
+            expiresAtMs: Date.now() + USER_PROFILE_BLOCK_TTL_MS,
+        };
+        return '';
+    }
 
     const parts: string[] = [];
     if (name) {
@@ -155,19 +170,23 @@ export function getUserProfileBlock(): string {
         'Mantén tono cercano y respetuoso. Cuando uses herramientas, confirma el resultado y resume brevemente lo hecho.'
     );
 
-    return '\n\n---\n### Perfil persistente de esta persona\n' + parts.join('\n\n');
+    const value = '\n\n---\n### Perfil persistente de esta persona\n' + parts.join('\n\n');
+    userProfileBlockCache = {
+        value,
+        expiresAtMs: Date.now() + USER_PROFILE_BLOCK_TTL_MS,
+    };
+    return value;
 }
 
-export function setUserDisplayName(name: string): void {
-    setMeta(META_USER_NAME, name.trim());
+export async function setUserDisplayName(name: string): Promise<void> {
+    await setMeta(META_USER_NAME, name.trim());
 }
 
-/** Añade una línea al perfil en metadata; respeta USER_PROFILE del .env como base si aún no hay notas guardadas. */
-export function appendUserProfileNote(note: string): void {
+export async function appendUserProfileNote(note: string): Promise<void> {
     const trimmed = note.trim();
     if (!trimmed) return;
 
-    let cur = getMeta(META_USER_PROFILE);
+    let cur = await getMeta(META_USER_PROFILE);
     if (cur == null || cur === '') {
         cur = process.env.USER_PROFILE?.trim() ?? '';
     }
@@ -177,151 +196,78 @@ export function appendUserProfileNote(note: string): void {
     if (next.length > USER_PROFILE_MAX_CHARS) {
         next = next.slice(next.length - USER_PROFILE_MAX_CHARS);
     }
-    setMeta(META_USER_PROFILE, next);
+    await setMeta(META_USER_PROFILE, next);
 }
 
-export type ScheduledTaskRow = {
-    id: number;
-    chat_id: string;
-    instruction: string;
-    run_at_ms: number;
-    status: string;
-    created_at: string;
-};
-
-export function insertScheduledTask(chatId: string, instruction: string, runAtMs: number): number {
-    const r = getDb()
-        .prepare(
-            `INSERT INTO scheduled_tasks (chat_id, instruction, run_at_ms, status) VALUES (?, ?, ?, 'pending')`
-        )
-        .run(chatId, instruction, runAtMs);
-    return Number(r.lastInsertRowid);
+export async function insertScheduledTask(chatId: string, instruction: string, runAtMs: number): Promise<number> {
+    if (b() === 'supabase') return supabaseInsertScheduledTask(chatId, instruction, runAtMs);
+    return sqliteInsertScheduledTask(chatId, instruction, runAtMs);
 }
 
-export function listPendingScheduledForChat(chatId: string): ScheduledTaskRow[] {
-    return getDb()
-        .prepare(
-            `SELECT id, chat_id, instruction, run_at_ms, status, created_at FROM scheduled_tasks
-             WHERE chat_id = ? AND status = 'pending' ORDER BY run_at_ms ASC`
-        )
-        .all(chatId) as ScheduledTaskRow[];
+export async function listPendingScheduledForChat(chatId: string): Promise<ScheduledTaskRow[]> {
+    if (b() === 'supabase') return supabaseListPendingScheduledForChat(chatId);
+    return sqliteListPendingScheduledForChat(chatId);
 }
 
-/** Atomically toma la siguiente tarea vencida o null. */
-export function claimNextDueScheduledTask(nowMs: number): ScheduledTaskRow | null {
-    const database = getDb();
-    const txn = database.transaction(() => {
-        const row = database
-            .prepare(
-                `SELECT id, chat_id, instruction, run_at_ms, status, created_at FROM scheduled_tasks
-                 WHERE status = 'pending' AND run_at_ms <= ? ORDER BY run_at_ms ASC LIMIT 1`
-            )
-            .get(nowMs) as ScheduledTaskRow | undefined;
-        if (!row) return null;
-        const upd = database
-            .prepare(`UPDATE scheduled_tasks SET status = 'running' WHERE id = ? AND status = 'pending'`)
-            .run(row.id);
-        if (upd.changes !== 1) return null;
-        return row;
-    });
-    return txn();
+export async function claimNextDueScheduledTask(nowMs: number): Promise<ScheduledTaskRow | null> {
+    if (b() === 'supabase') return supabaseClaimNextDueScheduledTask(nowMs);
+    return sqliteClaimNextDueScheduledTask(nowMs);
 }
 
-export function markScheduledTaskDone(id: number): void {
-    getDb().prepare(`UPDATE scheduled_tasks SET status = 'done' WHERE id = ?`).run(id);
+export async function markScheduledTaskDone(id: number): Promise<void> {
+    if (b() === 'supabase') return supabaseMarkScheduledTaskDone(id);
+    sqliteMarkScheduledTaskDone(id);
 }
 
-export function markScheduledTaskFailed(id: number): void {
-    getDb().prepare(`UPDATE scheduled_tasks SET status = 'failed' WHERE id = ?`).run(id);
+export async function markScheduledTaskFailed(id: number): Promise<void> {
+    if (b() === 'supabase') return supabaseMarkScheduledTaskFailed(id);
+    sqliteMarkScheduledTaskFailed(id);
 }
 
-/** Devuelve a pending tareas "running" cuya hora de ejecución era hace más de maxAgeMs (tareas colgadas). */
-export function releaseStuckRunningTasks(nowMs: number, maxAgeMs: number): number {
-    const cutoff = nowMs - maxAgeMs;
-    const r = getDb()
-        .prepare(
-            `UPDATE scheduled_tasks SET status = 'pending' WHERE status = 'running' AND run_at_ms < ?`
-        )
-        .run(cutoff);
-    return r.changes;
+export async function releaseStuckRunningTasks(nowMs: number, maxAgeMs: number): Promise<number> {
+    if (b() === 'supabase') return supabaseReleaseStuckRunningTasks(nowMs, maxAgeMs);
+    return sqliteReleaseStuckRunningTasks(nowMs, maxAgeMs);
 }
 
-export function cancelScheduledTaskForChat(chatId: string, taskId: number): boolean {
-    const r = getDb()
-        .prepare(
-            `DELETE FROM scheduled_tasks WHERE id = ? AND chat_id = ? AND status = 'pending'`
-        )
-        .run(taskId, chatId);
-    return r.changes === 1;
+export async function cancelScheduledTaskForChat(chatId: string, taskId: number): Promise<boolean> {
+    if (b() === 'supabase') return supabaseCancelScheduledTaskForChat(chatId, taskId);
+    return sqliteCancelScheduledTaskForChat(chatId, taskId);
 }
 
-// ── LinkedIn: publicaciones pendientes de aprobación (Telegram) ─────────────
-
-export type LinkedInPendingRow = {
-    id: number;
-    chat_id: string;
-    body: string;
-    visibility: string;
-    status: string;
-    linkedin_response: string | null;
-    error: string | null;
-    created_at: string;
-};
-
-export function insertLinkedInPendingPost(
+export async function insertLinkedInPendingPost(
     chatId: string,
     body: string,
-    visibility: 'PUBLIC' | 'CONNECTIONS'
-): number {
-    const r = getDb()
-        .prepare(
-            `INSERT INTO linkedin_pending_posts (chat_id, body, visibility, status) VALUES (?, ?, ?, 'pending')`
-        )
-        .run(chatId, body, visibility);
-    return Number(r.lastInsertRowid);
+    visibility: 'PUBLIC' | 'CONNECTIONS',
+    imageUrl?: string | null
+): Promise<number> {
+    if (b() === 'supabase') return supabaseInsertLinkedInPendingPost(chatId, body, visibility, imageUrl);
+    return sqliteInsertLinkedInPendingPost(chatId, body, visibility, imageUrl);
 }
 
-export function getLinkedInPendingPostForChat(id: number, chatId: string): LinkedInPendingRow | null {
-    const row = getDb()
-        .prepare(
-            `SELECT id, chat_id, body, visibility, status, linkedin_response, error, created_at
-             FROM linkedin_pending_posts WHERE id = ? AND chat_id = ?`
-        )
-        .get(id, chatId) as LinkedInPendingRow | undefined;
-    return row ?? null;
+export async function getLinkedInPendingPostForChat(
+    id: number,
+    chatId: string
+): Promise<LinkedInPendingRow | null> {
+    if (b() === 'supabase') return supabaseGetLinkedInPendingPostForChat(id, chatId);
+    return sqliteGetLinkedInPendingPostForChat(id, chatId);
 }
 
-export function listLinkedInPendingPostsForChat(chatId: string, limit = 15): LinkedInPendingRow[] {
-    return getDb()
-        .prepare(
-            `SELECT id, chat_id, body, visibility, status, linkedin_response, error, created_at
-             FROM linkedin_pending_posts
-             WHERE chat_id = ? AND status = 'pending' ORDER BY id DESC LIMIT ?`
-        )
-        .all(chatId, limit) as LinkedInPendingRow[];
+export async function listLinkedInPendingPostsForChat(chatId: string, limit = 15): Promise<LinkedInPendingRow[]> {
+    if (b() === 'supabase') return supabaseListLinkedInPendingPostsForChat(chatId, limit);
+    return sqliteListLinkedInPendingPostsForChat(chatId, limit);
 }
 
-export function setLinkedInPendingPublished(id: number, response: string): void {
-    getDb()
-        .prepare(
-            `UPDATE linkedin_pending_posts SET status = 'published', linkedin_response = ?, error = NULL,
-             updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-        )
-        .run(response, id);
+export async function setLinkedInPendingPublished(id: number, response: string): Promise<void> {
+    if (b() === 'supabase') return supabaseSetLinkedInPendingPublished(id, response);
+    sqliteSetLinkedInPendingPublished(id, response);
 }
 
-export function setLinkedInPendingFailed(id: number, error: string): void {
-    getDb()
-        .prepare(
-            `UPDATE linkedin_pending_posts SET status = 'failed', error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-        )
-        .run(error, id);
+export async function setLinkedInPendingFailed(id: number, error: string): Promise<void> {
+    if (b() === 'supabase') return supabaseSetLinkedInPendingFailed(id, error);
+    sqliteSetLinkedInPendingFailed(id, error);
 }
 
-export function setLinkedInPendingRejected(id: number): void {
-    getDb()
-        .prepare(
-            `UPDATE linkedin_pending_posts SET status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-        )
-        .run(id);
+export async function setLinkedInPendingRejected(id: number): Promise<void> {
+    if (b() === 'supabase') return supabaseSetLinkedInPendingRejected(id);
+    sqliteSetLinkedInPendingRejected(id);
 }

@@ -66,7 +66,7 @@ npm run dev
 | `drive_archive_important_emails` | Crear carpeta + guardar correos importantes en un paso |
 | `linkedin_save_draft` | Guardar borrador de LinkedIn (post, titular, Acerca de, etc.) en `linkedin/drafts/*.md` |
 | `linkedin_list_drafts` | Listar borradores recientes en el workspace |
-| `linkedin_propose_post` | Encola un post para el feed; **no publica** hasta que apruebes en Telegram (`/li_approve ID`) |
+| `linkedin_propose_post` | Encola un post para el feed (texto; opcional `image_url` HTTPS); **no publica** hasta `/li_approve ID` en Telegram |
 | *(Telegram)* `/li_pending` | Ver posts encolados pendientes de aprobación |
 | *(Telegram)* `/li_approve N` | Publicar en LinkedIn la propuesta `N` (API oficial) |
 | *(Telegram)* `/li_reject N` | Descartar la propuesta `N` |
@@ -97,9 +97,21 @@ LINKEDIN_REFRESH_TOKEN=...
 # Opcional si userinfo falla: LINKEDIN_PERSON_URN=urn:li:person:XXXX
 ```
 
-**Flujo:** el agente llama a `linkedin_propose_post` → recibes en Telegram el **ID** → revisas el texto → `/li_approve ID` publica vía `https://api.linkedin.com/v2/ugcPosts`. Sin ese comando **no** se llama a la API de publicación.
+**Flujo:** el agente llama a `linkedin_propose_post` (opcional `image_url` de `generate_image` u otra URL HTTPS pública) → recibes el **ID** en Telegram → `/li_approve ID` publica (texto o texto+imagen vía `ugcPosts` + subida de activo). Sin ese comando **no** se llama a la API de publicación.
 
-Los límites y políticas de LinkedIn aplican (cuotas, moderación, tipo de cuenta). Solo posts de **texto** en esta integración; imágenes/enlaces en UGC requieren pasos extra.
+Los límites y políticas de LinkedIn aplican (cuotas, moderación, tipo de cuenta). La imagen debe ser una URL que el **servidor** pueda descargar (típicamente la URL pública que devuelve `generate_image`).
+
+## Memoria persistente (SQLite vs Supabase)
+
+Por defecto el historial, tareas programadas, metadata (perfil), cola LinkedIn, etc. van a **SQLite** (`agent_memory.db` junto al proceso).
+
+Para **escalar** (varias instancias del contenedor, backups gestionados, Postgres):
+
+1. Crea un proyecto en [Supabase](https://supabase.com).
+2. En **SQL Editor**, ejecuta el script `supabase/migrations/001_agent_memory.sql` del repo (tablas + función atómica `claim_next_due_scheduled_task` para workers concurrentes).
+3. En Dokploy (o `.env`), define **`SUPABASE_URL`** y **`SUPABASE_SERVICE_ROLE_KEY`** (clave **service_role**, solo en el servidor).
+
+Si ambas variables están definidas, el arranque usa **Supabase**; si no, **SQLite**. La migración de datos antiguos desde `agent_memory.db` no es automática: puedes exportar/importar a mano si lo necesitas.
 
 ## Workspace operativo (clientes y redes)
 
@@ -112,7 +124,7 @@ WORKSPACE_BASE_DIR=/opt/zirox-workspace
 Todas las tools de archivos (`create_folder`, `write_file`, `list_files`) quedan restringidas a esa ruta base para evitar accesos fuera del workspace.
 Para captura rapida de ideas, el agente puede usar `capture_note` y guardar en `capturas/ideas.md`.
 
-Perfil persistente: configura `USER_DISPLAY_NAME` y/o `USER_PROFILE` en el entorno, o deja que el usuario lo diga en el chat; el agente puede usar `remember_about_user` para guardar nombre y preferencias (tabla `metadata` en `agent_memory.db`). `clear_memory` solo borra el historial del chat, no el perfil.
+Perfil persistente: configura `USER_DISPLAY_NAME` y/o `USER_PROFILE` en el entorno, o deja que el usuario lo diga en el chat; el agente puede usar `remember_about_user` para guardar nombre y preferencias (tabla `metadata` en SQLite o Supabase). `clear_memory` solo borra el historial del chat, no el perfil.
 
 ### Tareas programadas (recordatorios)
 

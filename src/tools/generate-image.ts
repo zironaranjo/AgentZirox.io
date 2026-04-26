@@ -4,7 +4,7 @@ import { registerTool } from '../core/dispatcher';
 import { getToolContext } from '../core/tool-context';
 import { resolveSafeWorkspacePath } from './workspace-utils';
 
-const KIE_BASE = 'https://api.kie.ai';
+const KIE_BASE = (process.env.KIE_BASE_URL?.trim() || 'https://api.kie.ai').replace(/\/+$/, '');
 
 /** URL temporal para que Telegram envíe la foto tras processMessage (mismo chat). */
 const pendingTelegramImageUrl = new Map<string, string>();
@@ -113,34 +113,45 @@ type KieRecordData = {
 
 async function kieGenerateImageUrl(prompt: string, kieSize: '1:1' | '3:2' | '2:3'): Promise<string> {
     const apiKey = getKieKey();
+    const generatePaths = ['/api/v1/gpt-4o-image/generate', '/api/v1/gpt4o-image/generate'];
+    const recordInfoPaths = ['/api/v1/gpt-4o-image/record-info', '/api/v1/gpt4o-image/record-info'];
 
-    const genRes = await fetch(`${KIE_BASE}/api/v1/gpt4o-image/generate`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            prompt: prompt.slice(0, 4000),
-            size: kieSize,
-            nVariants: 1,
-        }),
-    });
+    let taskId = '';
+    let chosenRecordInfoPath = recordInfoPaths[0];
+    let lastGenerateErr = '';
+    for (let i = 0; i < generatePaths.length; i++) {
+        const p = generatePaths[i];
+        const genRes = await fetch(`${KIE_BASE}${p}`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                prompt: prompt.slice(0, 4000),
+                size: kieSize,
+                nVariants: 1,
+            }),
+        });
 
-    const genRaw = await genRes.text();
-    let genJson: { code?: number; msg?: string; data?: { taskId?: string } };
-    try {
-        genJson = JSON.parse(genRaw) as typeof genJson;
-    } catch {
-        throw new Error(`Kie generate no JSON: ${genRaw.slice(0, 400)}`);
+        const genRaw = await genRes.text();
+        let genJson: { code?: number; msg?: string; data?: { taskId?: string } };
+        try {
+            genJson = JSON.parse(genRaw) as typeof genJson;
+        } catch {
+            lastGenerateErr = `Kie generate no JSON en ${p}: ${genRaw.slice(0, 250)}`;
+            continue;
+        }
+        if (genRes.ok && genJson.code === 200 && genJson.data?.taskId) {
+            taskId = genJson.data.taskId;
+            chosenRecordInfoPath = recordInfoPaths[i] ?? recordInfoPaths[0];
+            break;
+        }
+        lastGenerateErr = `Kie generate fallo en ${p}: ${genJson.msg ?? genRes.status} ${genRaw.slice(0, 250)}`;
     }
-    if (!genRes.ok || genJson.code !== 200 || !genJson.data?.taskId) {
-        throw new Error(
-            `Kie generate fallo: ${genJson.msg ?? genRes.status} ${genRaw.slice(0, 500)}`
-        );
+    if (!taskId) {
+        throw new Error(lastGenerateErr || 'Kie generate fallo en todas las rutas conocidas.');
     }
-
-    const taskId = genJson.data.taskId;
     const maxMs = Math.min(
         600_000,
         Math.max(30_000, parseInt(process.env.KIE_IMAGE_POLL_MAX_MS ?? '180000', 10) || 180_000)
@@ -152,7 +163,7 @@ async function kieGenerateImageUrl(prompt: string, kieSize: '1:1' | '3:2' | '2:3
     const start = Date.now();
 
     while (Date.now() - start < maxMs) {
-        const infoUrl = `${KIE_BASE}/api/v1/gpt4o-image/record-info?taskId=${encodeURIComponent(taskId)}`;
+        const infoUrl = `${KIE_BASE}${chosenRecordInfoPath}?taskId=${encodeURIComponent(taskId)}`;
         const infoRes = await fetch(infoUrl, {
             headers: { Authorization: `Bearer ${apiKey}` },
         });
@@ -185,6 +196,10 @@ async function kieGenerateImageUrl(prompt: string, kieSize: '1:1' | '3:2' | '2:3
     throw new Error(
         `Kie: tiempo de espera agotado (${maxMs} ms) para taskId ${taskId}.`
     );
+}
+
+function isKieTimeoutError(err: unknown): err is Error {
+    return err instanceof Error && /Kie: tiempo de espera agotado/i.test(err.message);
 }
 
 registerTool({
@@ -231,7 +246,19 @@ registerTool({
         let revised_prompt: string | undefined;
 
         if (provider === 'kie') {
-            url = await kieGenerateImageUrl(p, openAiSizeToKieRatio(size));
+            try {
+                url = await kieGenerateImageUrl(p, openAiSizeToKieRatio(size));
+            } catch (err) {
+                if (isKieTimeoutError(err)) {
+                    return [
+                        '⚠️ La generacion de imagen esta tardando demasiado y se detuvo para no bloquear el chat.',
+                        'Puedes seguir con el post de texto ahora y luego volver a pedir la imagen en un mensaje aparte.',
+                        '',
+                        `Detalle: ${err.message}`,
+                    ].join('\n');
+                }
+                throw err;
+            }
         } else {
             const r = await openAiCreateImage(p, size);
             url = r.url;

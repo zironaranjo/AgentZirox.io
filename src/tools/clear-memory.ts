@@ -13,7 +13,7 @@ registerTool({
     },
     handler: async (args) => {
         const { chat_id } = args as { chat_id: string };
-        clearHistory(chat_id);
+        await clearHistory(chat_id);
         return '✅ Memoria limpiada. Empezamos de nuevo!';
     },
 });

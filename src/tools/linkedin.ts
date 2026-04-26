@@ -10,6 +10,20 @@ const DRAFTS_DIR = 'linkedin/drafts';
 /** Límite aproximado de caracteres para un post de texto en el feed de LinkedIn. */
 const LINKEDIN_POST_MAX_CHARS = 2900;
 
+function assertPublicHttpsImageUrl(raw: string): string {
+    const u = raw.trim();
+    let url: URL;
+    try {
+        url = new URL(u);
+    } catch {
+        throw new Error('image_url no es una URL valida');
+    }
+    if (url.protocol !== 'https:') {
+        throw new Error('image_url debe ser HTTPS (URL publica descargable por el servidor).');
+    }
+    return u;
+}
+
 function slugify(input: string, maxLen: number): string {
     const s = input
         .trim()
@@ -25,7 +39,7 @@ function slugify(input: string, maxLen: number): string {
 registerTool({
     name: 'linkedin_save_draft',
     description:
-        'Guardar un borrador de LinkedIn en el workspace (markdown en linkedin/drafts/). Usar cuando el usuario quiera guardar un post, titular, resumen Acerca de, comentario o mensaje de conexion para revisarlo o publicarlo manualmente en LinkedIn.',
+        'Guardar borrador en el workspace (markdown linkedin/drafts/). NO usar si el usuario pide publicar/subir/compartir en LinkedIn con el agente (en ese caso linkedin_propose_post + /li_approve). Solo cuando quiera archivo en VPS, copia local o revisar antes de publicar el mismo a mano.',
     parameters: {
         type: 'object',
         properties: {
@@ -110,7 +124,7 @@ registerTool({
 registerTool({
     name: 'linkedin_propose_post',
     description:
-        'Proponer una PUBLICACION de LinkedIn (feed) para que el usuario la apruebe antes de subirla. OBLIGATORIO para publicar automaticamente: nunca digas que ya esta publicado hasta que el usuario ejecute /li_approve ID en Telegram. El texto debe ser el definitivo (sin markdown de Telegram). visibility PUBLIC = cualquiera; CONNECTIONS = solo 1er grado.',
+        'Cola de publicacion en el feed de LinkedIn: usar cuando el usuario quiera publicar, subir o compartir un post (aunque no nombre la tool). Requiere chat vinculado (Telegram). Opcional image_url HTTPS tras generate_image. OBLIGATORIO si piden imagen+post: llamar generate_image antes y pasar su URL aqui. Nunca digas publicado hasta /li_approve. Texto sin markdown Telegram. visibility PUBLIC o CONNECTIONS.',
     parameters: {
         type: 'object',
         properties: {
@@ -123,13 +137,19 @@ registerTool({
                 enum: ['PUBLIC', 'CONNECTIONS'],
                 description: 'PUBLIC (recomendado para alcance) o CONNECTIONS (solo tu red cercana)',
             },
+            image_url: {
+                type: 'string',
+                description:
+                    'Opcional. URL HTTPS publica de la imagen (el servidor la descarga y la sube a LinkedIn). Usar la URL exacta de generate_image u otro hosting directo.',
+            },
         },
         required: ['post_text'],
     },
     handler: async (args) => {
-        const { post_text, visibility: visRaw } = args as {
+        const { post_text, visibility: visRaw, image_url: imageRaw } = args as {
             post_text: string;
             visibility?: string;
+            image_url?: string;
         };
 
         const tctx = getToolContext();
@@ -158,13 +178,14 @@ registerTool({
         }
 
         const visibility = visRaw === 'CONNECTIONS' ? 'CONNECTIONS' : 'PUBLIC';
-        const id = insertLinkedInPendingPost(tctx.chatId, text, visibility);
+        const imageUrl = imageRaw?.trim() ? assertPublicHttpsImageUrl(imageRaw) : null;
+        const id = await insertLinkedInPendingPost(tctx.chatId, text, visibility, imageUrl);
 
         const preview = text.length > 600 ? `${text.slice(0, 600)}…` : text;
 
         return [
             `📋 **Publicacion LinkedIn pendiente de tu aprobacion** — id \`${id}\``,
-            `Visibilidad: **${visibility}**`,
+            `Visibilidad: **${visibility}**${imageUrl ? '\n🖼️ Incluye **imagen** (se adjuntara al publicar).' : ''}`,
             '',
             '---',
             preview,

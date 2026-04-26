@@ -49,7 +49,7 @@ registerTool({
             throw new Error('La fecha debe ser al menos ~1 minuto en el futuro');
         }
 
-        const id = insertScheduledTask(ctx.chatId, instruction, runAtMs);
+        const id = await insertScheduledTask(ctx.chatId, instruction, runAtMs);
         const when = new Date(runAtMs).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
         return [
             '✅ Tarea programada.',
@@ -68,7 +68,7 @@ registerTool({
     handler: async () => {
         const ctx = getToolContext();
         if (!ctx?.chatId) throw new Error('list_scheduled_tasks solo desde Telegram');
-        const rows = listPendingScheduledForChat(ctx.chatId);
+        const rows = await listPendingScheduledForChat(ctx.chatId);
         if (rows.length === 0) return 'No hay tareas pendientes en este chat.';
         const lines = rows.map((r) => {
             const when = new Date(r.run_at_ms).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
@@ -93,7 +93,7 @@ registerTool({
         if (!ctx?.chatId) throw new Error('cancel_scheduled_task solo desde Telegram');
         const id = Number((args as { task_id?: string }).task_id);
         if (!Number.isFinite(id)) throw new Error('task_id inválido');
-        const ok = cancelScheduledTaskForChat(ctx.chatId, id);
+        const ok = await cancelScheduledTaskForChat(ctx.chatId, id);
         return ok ? `✅ Tarea ${id} cancelada.` : `No se encontró la tarea ${id} pendiente en este chat.`;
     },
 });

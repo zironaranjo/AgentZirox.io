@@ -8,7 +8,7 @@ import {
     setLinkedInPendingPublished,
     setLinkedInPendingRejected,
 } from '../../core/memory';
-import { isLinkedInOAuthConfigured, publishLinkedInTextPost } from '../linkedin/linkedin-api';
+import { isLinkedInOAuthConfigured, publishLinkedInFeedPost } from '../linkedin/linkedin-api';
 import { listTools } from '../../core/dispatcher';
 import { logger } from '../../core/logger';
 import { consumePendingTelegramImageUrl } from '../../tools/generate-image';
@@ -50,7 +50,7 @@ export async function startTelegramBot() {
     // ── /reset ────────────────────────────────────────────────────────────────
     bot.command('reset', async (ctx) => {
         const chatId = String(ctx.chat.id);
-        clearHistory(chatId);
+        await clearHistory(chatId);
         await ctx.reply('🧹 Historial borrado. Empezamos de cero!');
     });
 
@@ -99,14 +99,15 @@ export async function startTelegramBot() {
     // ── LinkedIn (aprobación humana antes de publicar) ────────────────────────
     bot.command('li_pending', async (ctx) => {
         const chatId = String(ctx.chat.id);
-        const rows = listLinkedInPendingPostsForChat(chatId, 15);
+        const rows = await listLinkedInPendingPostsForChat(chatId, 15);
         if (rows.length === 0) {
             await ctx.reply('No hay publicaciones LinkedIn pendientes de aprobación en este chat.');
             return;
         }
         const lines = rows.map((r) => {
             const snippet = r.body.length > 220 ? `${r.body.slice(0, 220)}…` : r.body;
-            return `• #${r.id} (${r.visibility}) — ${r.created_at}\n${snippet}`;
+            const pic = r.image_url ? '🖼️ ' : '';
+            return `• ${pic}#${r.id} (${r.visibility}) — ${r.created_at}\n${snippet}`;
         });
         await ctx.reply(
             `📋 Pendientes:\n\n${lines.join('\n\n')}\n\nAprobar: /li_approve N — Rechazar: /li_reject N`
@@ -125,26 +126,27 @@ export async function startTelegramBot() {
             await ctx.reply('LinkedIn OAuth no configurado. Revisa LINKEDIN_* en .env (README).');
             return;
         }
-        const row = getLinkedInPendingPostForChat(id, chatId);
+        const row = await getLinkedInPendingPostForChat(id, chatId);
         if (!row || row.status !== 'pending') {
             await ctx.reply(`No existe la propuesta #${id} en estado pendiente para este chat.`);
             return;
         }
         await ctx.reply('⏳ Publicando en LinkedIn…');
         try {
-            const result = await publishLinkedInTextPost(
+            const result = await publishLinkedInFeedPost(
                 row.body,
-                row.visibility === 'CONNECTIONS' ? 'CONNECTIONS' : 'PUBLIC'
+                row.visibility === 'CONNECTIONS' ? 'CONNECTIONS' : 'PUBLIC',
+                row.image_url
             );
             const ref = result.restLiId ?? result.rawBody ?? 'ok';
-            setLinkedInPendingPublished(id, ref);
+            await setLinkedInPendingPublished(id, ref);
             const msg = result.restLiId
                 ? `✅ Publicado en LinkedIn.\nRef: \`${result.restLiId}\``
                 : `✅ Publicado en LinkedIn.`;
             await ctx.reply(msg, { parse_mode: 'Markdown' });
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            setLinkedInPendingFailed(id, msg);
+            await setLinkedInPendingFailed(id, msg);
             await ctx.reply(`❌ Error al publicar: ${msg}`);
         }
     });
@@ -157,12 +159,12 @@ export async function startTelegramBot() {
             await ctx.reply('Uso: /li_reject NUMERO');
             return;
         }
-        const row = getLinkedInPendingPostForChat(id, chatId);
+        const row = await getLinkedInPendingPostForChat(id, chatId);
         if (!row || row.status !== 'pending') {
             await ctx.reply(`No existe la propuesta #${id} pendiente.`);
             return;
         }
-        setLinkedInPendingRejected(id);
+        await setLinkedInPendingRejected(id);
         await ctx.reply(`🛑 Propuesta #${id} rechazada. No se ha publicado nada en LinkedIn.`);
     });
 

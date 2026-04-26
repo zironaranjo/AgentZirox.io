@@ -34,13 +34,13 @@ export async function tickScheduledTasksInternal(): Promise<{ processed: number;
 
     try {
         const nowMs = Date.now();
-        const released = releaseStuckRunningTasks(nowMs, 2 * 60 * 60 * 1000);
+        const released = await releaseStuckRunningTasks(nowMs, 2 * 60 * 60 * 1000);
         if (released > 0) {
             logger.warn(`[scheduled] released ${released} stuck running task(s)`);
         }
 
         for (let i = 0; i < 15; i++) {
-            const task = claimNextDueScheduledTask(nowMs);
+            const task = await claimNextDueScheduledTask(nowMs);
             if (!task) break;
 
             try {
@@ -49,14 +49,14 @@ export async function tickScheduledTasksInternal(): Promise<{ processed: number;
                     `Cumple lo anterior ahora (búsqueda web, resumen, etc.). Sé concreto.`;
                 const reply = await processMessage(task.chat_id, prompt);
                 await sendTelegramChatMessage(task.chat_id, `🔔 *Recordatorio*\n\n${reply}`);
-                markScheduledTaskDone(task.id);
+                await markScheduledTaskDone(task.id);
                 processed++;
                 logger.info(`[scheduled] completed task ${task.id} for chat ${task.chat_id}`);
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 errors.push(`task ${task.id}: ${msg}`);
                 logger.error(`[scheduled] task ${task.id} failed:`, err);
-                markScheduledTaskFailed(task.id);
+                await markScheduledTaskFailed(task.id);
             }
         }
     } finally {

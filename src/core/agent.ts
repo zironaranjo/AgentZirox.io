@@ -17,14 +17,15 @@ export async function processMessage(chatId: string, userMessage: string): Promi
 
 async function processMessageInner(chatId: string, userMessage: string): Promise<string> {
     // Persist the user message
-    saveMessage(chatId, 'user', userMessage);
+    await saveMessage(chatId, 'user', userMessage);
 
     // Build context from recent history
-    const history = getHistory(chatId, 20) as ChatMessage[];
+    const history = (await getHistory(chatId, 20)) as ChatMessage[];
+    const conversation: ChatMessage[] = [...history];
     const tools = getToolDefinitions();
 
     // First LLM call
-    let response = await callLLM(history, tools);
+    let response = await callLLM(conversation, tools);
 
     // Agentic loop: keep calling tools until LLM produces a final text response
     let iterations = 0;
@@ -36,7 +37,8 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
 
         // Save assistant's tool-call intent
         if (response.content) {
-            saveMessage(chatId, 'assistant', response.content);
+            await saveMessage(chatId, 'assistant', response.content);
+            conversation.push({ role: 'assistant', content: response.content });
         }
 
         // Execute each tool call and collect results
@@ -53,15 +55,15 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         }
 
         // Continue the conversation with tool results
-        const updatedHistory = getHistory(chatId, 20) as ChatMessage[];
-        response = await callLLM([...updatedHistory, ...toolResults], tools);
+        conversation.push(...toolResults);
+        response = await callLLM(conversation, tools);
     }
 
     const finalContent =
         response.content?.trim() ||
         (executedToolResults.length > 0 ? executedToolResults[executedToolResults.length - 1] : '') ||
         '✅ Hecho.';
-    saveMessage(chatId, 'assistant', finalContent);
+    await saveMessage(chatId, 'assistant', finalContent);
     return finalContent;
 }
 

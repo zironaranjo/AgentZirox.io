@@ -3,6 +3,8 @@ import { getMeta, setMeta } from '../../core/memory';
 const TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken';
 const USERINFO_URL = 'https://api.linkedin.com/v2/userinfo';
 const UGC_POSTS_URL = 'https://api.linkedin.com/v2/ugcPosts';
+const REGISTER_UPLOAD_URL = 'https://api.linkedin.com/v2/assets?action=registerUpload';
+const MAX_LINKEDIN_IMAGE_BYTES = 12 * 1024 * 1024;
 
 const META_PERSON_URN = 'linkedin_person_urn';
 
@@ -121,7 +123,7 @@ export async function getLinkedInPersonUrn(): Promise<string> {
     }
 
     try {
-        const cached = getMeta(META_PERSON_URN);
+        const cached = await getMeta(META_PERSON_URN);
         if (cached?.startsWith('urn:li:person:')) {
             return cached;
         }
@@ -145,7 +147,7 @@ export async function getLinkedInPersonUrn(): Promise<string> {
     }
     const urn = `urn:li:person:${j.sub}`;
     try {
-        setMeta(META_PERSON_URN, urn);
+        await setMeta(META_PERSON_URN, urn);
     } catch {
         /* ignore */
     }
@@ -158,6 +160,173 @@ export type LinkedInVisibility = 'PUBLIC' | 'CONNECTIONS';
  * Publica un post de solo texto (feed) vía UGC API.
  * Requiere producto "Share on LinkedIn" en la app y scope w_member_social.
  */
+type RegisterUploadValue = {
+    uploadMechanism?: {
+        'com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'?: {
+            uploadUrl?: string;
+            headers?: Record<string, string | string[]>;
+        };
+    };
+    asset?: string;
+};
+
+async function registerLinkedInFeedImageUpload(
+    token: string,
+    ownerUrn: string
+): Promise<{ uploadUrl: string; asset: string; uploadHeaders: Record<string, string> }> {
+    const body = {
+        registerUploadRequest: {
+            owner: ownerUrn,
+            recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
+            serviceRelationships: [
+                {
+                    relationshipType: 'OWNER',
+                    identifier: 'urn:li:userGeneratedContent',
+                },
+            ],
+            supportedUploadMechanism: ['SYNCHRONOUS_UPLOAD'],
+        },
+    };
+
+    const res = await fetch(REGISTER_UPLOAD_URL, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'X-Restli-Protocol-Version': '2.0.0',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+    });
+
+    const raw = await res.text();
+    if (!res.ok) {
+        throw new Error(`LinkedIn registerUpload ${res.status}: ${raw.slice(0, 700)}`);
+    }
+
+    let parsed: { value?: RegisterUploadValue };
+    try {
+        parsed = JSON.parse(raw) as { value?: RegisterUploadValue };
+    } catch {
+        throw new Error(`registerUpload no JSON: ${raw.slice(0, 300)}`);
+    }
+
+    const mech = parsed.value?.uploadMechanism?.['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'];
+    const uploadUrl = mech?.uploadUrl;
+    const asset = parsed.value?.asset;
+    if (!uploadUrl || !asset) {
+        throw new Error(`registerUpload respuesta incompleta: ${raw.slice(0, 500)}`);
+    }
+
+    const uploadHeaders: Record<string, string> = {};
+    for (const [k, v] of Object.entries(mech.headers ?? {})) {
+        uploadHeaders[k] = Array.isArray(v) ? v.join(', ') : String(v);
+    }
+
+    return { uploadUrl, asset, uploadHeaders };
+}
+
+async function putBytesToLinkedInUpload(
+    uploadUrl: string,
+    uploadHeaders: Record<string, string>,
+    bytes: Buffer,
+    imageContentType?: string | null
+): Promise<void> {
+    const h = new Headers();
+    for (const [k, v] of Object.entries(uploadHeaders)) {
+        h.set(k, v);
+    }
+    if (!h.has('Content-Type')) {
+        const ct = imageContentType?.startsWith('image/') ? imageContentType : null;
+        h.set('Content-Type', ct ?? 'application/octet-stream');
+    }
+
+    const putRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: h,
+        body: new Uint8Array(bytes),
+    });
+    if (!putRes.ok) {
+        const t = await putRes.text();
+        throw new Error(`LinkedIn PUT imagen ${putRes.status}: ${t.slice(0, 500)}`);
+    }
+}
+
+async function publishLinkedInPostWithImage(
+    text: string,
+    visibility: LinkedInVisibility,
+    imageUrl: string
+): Promise<{ restLiId: string | null; rawBody: string }> {
+    const token = await getLinkedInAccessToken();
+    const author = await getLinkedInPersonUrn();
+
+    const imgRes = await fetch(imageUrl, { redirect: 'follow' });
+    if (!imgRes.ok) {
+        throw new Error(`No se pudo descargar la imagen (${imgRes.status}) desde la URL.`);
+    }
+    const buf = Buffer.from(await imgRes.arrayBuffer());
+    if (buf.length > MAX_LINKEDIN_IMAGE_BYTES) {
+        throw new Error(`Imagen demasiado grande (${buf.length} bytes). Max ~12 MB.`);
+    }
+
+    const dlCt = imgRes.headers.get('content-type')?.split(';')[0]?.trim() ?? null;
+
+    const { uploadUrl, asset, uploadHeaders } = await registerLinkedInFeedImageUpload(token, author);
+    await putBytesToLinkedInUpload(uploadUrl, uploadHeaders, buf, dlCt);
+
+    const payload = {
+        author,
+        lifecycleState: 'PUBLISHED',
+        specificContent: {
+            'com.linkedin.ugc.ShareContent': {
+                shareCommentary: { text },
+                shareMediaCategory: 'IMAGE',
+                media: [
+                    {
+                        status: 'READY',
+                        media: asset,
+                    },
+                ],
+            },
+        },
+        visibility: {
+            'com.linkedin.ugc.MemberNetworkVisibility': visibility,
+        },
+    };
+
+    const res = await fetch(UGC_POSTS_URL, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'X-Restli-Protocol-Version': '2.0.0',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+    });
+
+    const restLiId = res.headers.get('x-restli-id');
+    const rawBody = await res.text();
+
+    if (!res.ok) {
+        throw new Error(`LinkedIn ugcPosts (imagen) ${res.status}: ${rawBody.slice(0, 800)}`);
+    }
+
+    return { restLiId, rawBody: rawBody.slice(0, 500) };
+}
+
+/**
+ * Publica en el feed: solo texto o texto + imagen (URL publica descargable por el servidor).
+ */
+export async function publishLinkedInFeedPost(
+    text: string,
+    visibility: LinkedInVisibility,
+    imageUrl?: string | null
+): Promise<{ restLiId: string | null; rawBody: string }> {
+    if (imageUrl?.trim()) {
+        return publishLinkedInPostWithImage(text, visibility, imageUrl.trim());
+    }
+    return publishLinkedInTextPost(text, visibility);
+}
+
 export async function publishLinkedInTextPost(
     text: string,
     visibility: LinkedInVisibility

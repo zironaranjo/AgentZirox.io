@@ -34,11 +34,11 @@ registerTool({
 
         const done: string[] = [];
         if (name) {
-            setUserDisplayName(name);
+            await setUserDisplayName(name);
             done.push(`Nombre guardado: ${name}`);
         }
         if (note) {
-            appendUserProfileNote(note);
+            await appendUserProfileNote(note);
             done.push('Preferencia añadida al perfil.');
         }
 

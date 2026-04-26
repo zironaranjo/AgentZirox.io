@@ -38,7 +38,7 @@ const PORT = process.env.PORT || 3000;
 async function main() {
     logger.info(`🤖 ${AGENT_NAME} v${AGENT_VERSION} starting...`);
 
-    // Initialize persistent memory (SQLite)
+    // Initialize persistent memory (SQLite o Supabase según .env)
     await initMemory();
     logger.info('✅ Memory initialized');
 

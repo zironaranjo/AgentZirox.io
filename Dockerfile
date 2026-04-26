@@ -24,6 +24,8 @@ RUN npx tsup \
     server.ts \
     src/core/logger.ts \
     src/core/memory.ts \
+    src/core/memory-sqlite.ts \
+    src/core/memory-supabase.ts \
     src/core/agent.ts \
     src/core/llm.ts \
     src/core/dispatcher.ts \

@@ -57,7 +57,7 @@ export async function runDailySelfImprove(authToken: string | null): Promise<Dai
     }
 
     const today = madridCalendarDay(new Date());
-    const last = getMeta(META_LAST_DAY);
+    const last = await getMeta(META_LAST_DAY);
     if (last === today) {
         return { status: 'already_run', day: today };
     }
@@ -68,14 +68,14 @@ export async function runDailySelfImprove(authToken: string | null): Promise<Dai
     const maxChars = Math.min(Math.max(Number(process.env.SELF_IMPROVE_MAX_TRANSCRIPT_CHARS ?? 14000) || 14000, 2000), 32000);
 
     const since = Date.now() - windowH * 60 * 60 * 1000;
-    const rows = getRecentMessagesAllChats(maxRows).filter((r) => {
+    const rows = (await getRecentMessagesAllChats(maxRows)).filter((r) => {
         const t = new Date(r.created_at).getTime();
         return t >= since;
     });
 
     const userCount = rows.filter((r) => r.role === 'user').length;
     if (userCount < minUser) {
-        setMeta(META_LAST_DAY, today);
+        await setMeta(META_LAST_DAY, today);
         logger.info(`[self-improve] skipped low activity (${userCount} user msgs)`);
         return { status: 'skipped_low_activity', userMessages: userCount };
     }
@@ -96,15 +96,15 @@ export async function runDailySelfImprove(authToken: string | null): Promise<Dai
 
         const insights = parseInsightLines(raw);
         if (insights.length === 0) {
-            setMeta(META_LAST_DAY, today);
+            await setMeta(META_LAST_DAY, today);
             logger.info('[self-improve] no insights (NADA o vacío)');
             return { status: 'ok', day: today, insightsAdded: 0, rawPreview: raw.slice(0, 200) };
         }
 
         for (const line of insights) {
-            appendUserProfileNote(`[auto ${today}] ${line}`);
+            await appendUserProfileNote(`[auto ${today}] ${line}`);
         }
-        setMeta(META_LAST_DAY, today);
+        await setMeta(META_LAST_DAY, today);
         logger.info(`[self-improve] added ${insights.length} insight(s) for ${today}`);
         return { status: 'ok', day: today, insightsAdded: insights.length };
     } catch (err) {
