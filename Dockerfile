@@ -21,6 +21,7 @@ RUN npm run build
 
 # Paso 2: compilar server.ts + todo src/ con tsup en formato ESM
 RUN npx tsup \
+    --external dotenv \
     server.ts \
     src/core/logger.ts \
     src/core/memory.ts \
