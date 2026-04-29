@@ -4,6 +4,7 @@ import { registerTool } from '../core/dispatcher';
 import { getToolContext } from '../core/tool-context';
 import { resolveSafeWorkspacePath } from './workspace-utils';
 import { sendTelegramChatMessage } from '../integrations/telegram/send-message';
+import { logger } from '../core/logger';
 
 const KIE_BASE = (process.env.KIE_BASE_URL?.trim() || 'https://api.kie.ai').replace(/\/+$/, '');
 
@@ -136,11 +137,13 @@ async function kieGenerateImageUrl(prompt: string, kieSize: '1:1' | '3:2' | '2:3
         });
 
         const genRaw = await genRes.text();
+        logger.info(`[KIE] generate status=${genRes.status} path=${p} body=${genRaw.slice(0, 400)}`);
         let genJson: { code?: number; msg?: string; data?: { taskId?: string } };
         try {
             genJson = JSON.parse(genRaw) as typeof genJson;
         } catch {
             lastGenerateErr = `Kie generate no JSON en ${p}: ${genRaw.slice(0, 250)}`;
+            logger.error(`[KIE] ${lastGenerateErr}`);
             continue;
         }
         if (genRes.ok && genJson.code === 200 && genJson.data?.taskId) {
@@ -149,9 +152,12 @@ async function kieGenerateImageUrl(prompt: string, kieSize: '1:1' | '3:2' | '2:3
             break;
         }
         lastGenerateErr = `Kie generate fallo en ${p}: ${genJson.msg ?? genRes.status} ${genRaw.slice(0, 250)}`;
+        logger.error(`[KIE] ${lastGenerateErr}`);
     }
     if (!taskId) {
-        throw new Error(lastGenerateErr || 'Kie generate fallo en todas las rutas conocidas.');
+        const err = lastGenerateErr || 'Kie generate fallo en todas las rutas conocidas.';
+        logger.error(`[KIE] Sin taskId: ${err}`);
+        throw new Error(err);
     }
 
     // Avisar al usuario que la generación está en curso (KIE puede tardar 1-2 min)
