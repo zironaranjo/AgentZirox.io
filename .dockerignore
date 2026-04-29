@@ -2,8 +2,6 @@ node_modules
 npm-debug.log
 .next/
 dist/
-.env
-.env.local
 .git
 .gitignore
 README.md
