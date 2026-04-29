@@ -185,6 +185,7 @@ async function kieGenerateImageUrl(prompt: string, kieSize: '1:1' | '3:2' | '2:3
             headers: { Authorization: `Bearer ${apiKey}` },
         });
         const infoRaw = await infoRes.text();
+        logger.info(`[KIE] record-info status=${infoRes.status} body=${infoRaw.slice(0, 600)}`);
         let infoJson: { code?: number; msg?: string; data?: KieRecordData };
         try {
             infoJson = JSON.parse(infoRaw) as typeof infoJson;
@@ -203,6 +204,7 @@ async function kieGenerateImageUrl(prompt: string, kieSize: '1:1' | '3:2' | '2:3
             return first;
         }
         if (d.successFlag === 2) {
+            logger.error(`[KIE] successFlag=2 raw=${infoRaw.slice(0, 600)}`);
             throw new Error(
                 `Kie generacion fallida: ${d.errorMessage ?? 'sin detalle'}`
             );
