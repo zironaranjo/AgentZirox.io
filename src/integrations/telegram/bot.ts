@@ -1,4 +1,4 @@
-import { Bot, type Context } from 'grammy';
+import { Bot, InputFile, type Context } from 'grammy';
 import { processMessage } from '../../core/agent';
 import {
     clearHistory,
@@ -271,9 +271,16 @@ async function sendAgentReplyWithOptionalImage(ctx: Context, chatId: string, res
     const imageUrl = consumePendingTelegramImageUrl(chatId);
     if (imageUrl) {
         try {
-            await ctx.replyWithPhoto(imageUrl, { caption: '🖼️ Imagen generada' });
+            // Descargar y subir como buffer para evitar que la URL de KIE expire
+            const res = await fetch(imageUrl);
+            if (res.ok) {
+                const buf = Buffer.from(await res.arrayBuffer());
+                await ctx.replyWithPhoto(new InputFile(buf, 'imagen.jpg'), { caption: '🖼️ Imagen generada' });
+            } else {
+                await ctx.replyWithPhoto(imageUrl, { caption: '🖼️ Imagen generada' });
+            }
         } catch (e) {
-            logger.warn('No se pudo enviar foto por URL (expira o bloqueo); el texto incluye el enlace.', e);
+            logger.warn('No se pudo enviar foto; el texto incluye el enlace.', e);
         }
     }
     await sendLongReply(ctx, response);

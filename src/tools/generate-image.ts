@@ -3,6 +3,7 @@ import path from 'node:path';
 import { registerTool } from '../core/dispatcher';
 import { getToolContext } from '../core/tool-context';
 import { resolveSafeWorkspacePath } from './workspace-utils';
+import { sendTelegramChatMessage } from '../integrations/telegram/send-message';
 
 const KIE_BASE = (process.env.KIE_BASE_URL?.trim() || 'https://api.kie.ai').replace(/\/+$/, '');
 
@@ -152,6 +153,16 @@ async function kieGenerateImageUrl(prompt: string, kieSize: '1:1' | '3:2' | '2:3
     if (!taskId) {
         throw new Error(lastGenerateErr || 'Kie generate fallo en todas las rutas conocidas.');
     }
+
+    // Avisar al usuario que la generación está en curso (KIE puede tardar 1-2 min)
+    const tctxEarly = getToolContext();
+    if (tctxEarly?.chatId) {
+        sendTelegramChatMessage(
+            tctxEarly.chatId,
+            '🎨 Generando imagen con Kie.ai... puede tardar 1-2 minutos, ahora te la mando.'
+        ).catch(() => {/* ignorar si falla el aviso */});
+    }
+
     const maxMs = Math.min(
         600_000,
         Math.max(30_000, parseInt(process.env.KIE_IMAGE_POLL_MAX_MS ?? '180000', 10) || 180_000)
