@@ -185,6 +185,9 @@ export async function startTelegramBot() {
         const chatId = String(ctx.chat.id);
         const userText = ctx.message.text;
 
+        // Skip commands — they have their own handlers above
+        if (userText.startsWith('/')) return;
+
         // Quick shortcut to read last transcribed audio
         if (isReadLastAudioRequest(userText)) {
             const last = lastTranscriptionByChat.get(chatId);
