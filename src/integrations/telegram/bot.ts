@@ -127,8 +127,8 @@ export async function startTelegramBot() {
             return;
         }
         const row = await getLinkedInPendingPostForChat(id, chatId);
-        if (!row || row.status !== 'pending') {
-            await ctx.reply(`No existe la propuesta #${id} en estado pendiente para este chat.`);
+        if (!row || (row.status !== 'pending' && row.status !== 'failed')) {
+            await ctx.reply(`No existe la propuesta #${id} pendiente o reintentable en este chat.`);
             return;
         }
         await ctx.reply('⏳ Publicando en LinkedIn…');
@@ -146,8 +146,20 @@ export async function startTelegramBot() {
             await ctx.reply(msg, { parse_mode: 'Markdown' });
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            await setLinkedInPendingFailed(id, msg);
-            await ctx.reply(`❌ Error al publicar: ${msg}`);
+            const cause = (err instanceof Error && (err as NodeJS.ErrnoException).cause)
+                ? String((err as NodeJS.ErrnoException).cause)
+                : '';
+            logger.error(`[LinkedIn] li_approve error: ${msg}${cause ? ` | cause: ${cause}` : ''}`);
+            // Solo marcar como fallido si es error definitivo de LinkedIn (4xx/5xx)
+            // Si es error de red (fetch failed), dejar pending para poder reintentar
+            const isNetworkError = msg.toLowerCase().includes('fetch failed') ||
+                msg.toLowerCase().includes('econnrefused') ||
+                msg.toLowerCase().includes('enotfound') ||
+                msg.toLowerCase().includes('etimedout');
+            if (!isNetworkError) {
+                await setLinkedInPendingFailed(id, msg);
+            }
+            await ctx.reply(`❌ Error al publicar: ${msg}${cause ? `\nDetalle: ${cause}` : ''}${isNetworkError ? '\n\n⚠️ Error de red — el post sigue pendiente, puedes reintentar con /li_approve ' + id : ''}`);
         }
     });
 
