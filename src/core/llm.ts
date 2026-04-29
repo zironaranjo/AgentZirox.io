@@ -1,6 +1,7 @@
 import Groq from 'groq-sdk';
 import OpenAI from 'openai';
-import { getUserProfileBlock } from './memory';
+import { getUserProfileBlock, listPendingScheduledForChat } from './memory';
+import { getToolContext } from './tool-context';
 
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
@@ -68,9 +69,27 @@ function getProvider(): Provider {
     return 'groq';
 }
 
-async function buildSystemPrompt(): Promise<string> {
+export async function buildSystemPrompt(): Promise<string> {
     const profile = await getUserProfileBlock();
     const now = new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
+
+    let pendingTasksBlock = '';
+    const ctx = getToolContext();
+    if (ctx?.chatId) {
+        try {
+            const tasks = await listPendingScheduledForChat(ctx.chatId);
+            if (tasks.length > 0) {
+                const lines = tasks.map((t) => {
+                    const when = new Date(t.run_at_ms).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
+                    return `• [id:${t.id}] ${when} → ${t.instruction.slice(0, 150)}${t.instruction.length > 150 ? '…' : ''}`;
+                });
+                pendingTasksBlock = `\n\n---\n### Tareas programadas pendientes\n${lines.join('\n')}`;
+            }
+        } catch {
+            /* ignorar si la DB no está lista */
+        }
+    }
+
     return `Eres AgenteZirox, un agente de IA personal altamente capaz.
 Tienes acceso a herramientas para enviar emails, llamar APIs externas, buscar en tu memoria, buscar en internet (web_search) y más.
 Cuando el usuario pida investigar, buscar en la web, datos actuales, correos o telefonos de empresas, o "que dice internet", usa la tool web_search con una consulta clara.
@@ -86,7 +105,7 @@ En Telegram SI puedes procesar audios/notas de voz porque el sistema los transcr
 Si el usuario pregunta por audios, responde que si puedes entenderlos por transcripcion automatica y ofrece ayudar con resumen, tareas o guardado.
 No digas que "no puedes procesar audio directamente" en este proyecto.
 Responde siempre en el idioma del usuario. Sé conciso, útil y proactivo.
-Fecha y hora actual: ${now}${profile}`;
+Fecha y hora actual: ${now}${profile}${pendingTasksBlock}`;
 }
 
 /**
