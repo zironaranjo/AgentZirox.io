@@ -2,6 +2,7 @@ import Groq from 'groq-sdk';
 import OpenAI from 'openai';
 import { getUserProfileBlock, listPendingScheduledForChat } from './memory';
 import { getToolContext } from './tool-context';
+import { logger } from './logger';
 
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant';
@@ -27,6 +28,16 @@ export interface LLMResponse {
 let _groqClient: Groq | null = null;
 let _openRouterClient: OpenAI | null = null;
 let _hermesClient: OpenAI | null = null;
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRateLimitError(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err);
+    const m = msg.toLowerCase();
+    return m.includes('429') || m.includes('rate limit') || m.includes('too many requests');
+}
 
 function getGroqClient(): Groq {
     if (!_groqClient) {
@@ -171,13 +182,34 @@ export async function callLLMSimple(
     }
 
     const model = process.env.OPENROUTER_MODEL ?? 'anthropic/claude-3.5-sonnet';
-    const res = await getOpenRouterClient().chat.completions.create({
-        model,
-        messages: fullMessages as OpenAI.Chat.ChatCompletionMessageParam[],
-        temperature,
-        max_tokens,
-    });
-    return (res.choices[0]?.message?.content ?? '').trim();
+    const fallbackModel =
+        process.env.OPENROUTER_FALLBACK_MODEL?.trim() || 'google/gemini-2.0-flash-001';
+    const retries = Math.min(
+        4,
+        Math.max(0, parseInt(process.env.OPENROUTER_RETRY_ATTEMPTS ?? '2', 10) || 2)
+    );
+    const models = [model, ...(fallbackModel && fallbackModel !== model ? [fallbackModel] : [])];
+
+    let lastErr: unknown;
+    for (const modelName of models) {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                const res = await getOpenRouterClient().chat.completions.create({
+                    model: modelName,
+                    messages: fullMessages as OpenAI.Chat.ChatCompletionMessageParam[],
+                    temperature,
+                    max_tokens,
+                });
+                return (res.choices[0]?.message?.content ?? '').trim();
+            } catch (err) {
+                lastErr = err;
+                if (!isRateLimitError(err)) throw err;
+                if (attempt >= retries) break;
+                await sleep(700 * (attempt + 1));
+            }
+        }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 async function callGroq(messages: ChatMessage[], tools?: LLMTool[]): Promise<LLMResponse> {
@@ -224,7 +256,7 @@ async function callOpenRouter(messages: ChatMessage[], tools?: LLMTool[]): Promi
     const toolsModel = process.env.OPENROUTER_TOOLS_MODEL ?? chatModel;
     const model = hasTools ? toolsModel : chatModel;
 
-    const params: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
+    const baseParams: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming = {
         model,
         messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
         temperature: 0.7,
@@ -232,7 +264,7 @@ async function callOpenRouter(messages: ChatMessage[], tools?: LLMTool[]): Promi
     };
 
     if (tools && tools.length > 0) {
-        params.tools = tools.map((t) => ({
+        baseParams.tools = tools.map((t) => ({
             type: 'function' as const,
             function: {
                 name: t.name,
@@ -240,33 +272,59 @@ async function callOpenRouter(messages: ChatMessage[], tools?: LLMTool[]): Promi
                 parameters: t.parameters,
             },
         }));
-        params.tool_choice = 'auto';
+        baseParams.tool_choice = 'auto';
     }
 
-    try {
-        const res = await getOpenRouterClient().chat.completions.create(params);
-        const choice = res.choices[0];
-        const msg = choice.message;
+    const fallbackModel =
+        process.env.OPENROUTER_FALLBACK_MODEL?.trim() || 'google/gemini-2.0-flash-001';
+    const retries = Math.min(
+        4,
+        Math.max(0, parseInt(process.env.OPENROUTER_RETRY_ATTEMPTS ?? '2', 10) || 2)
+    );
+    const models = [model, ...(fallbackModel && fallbackModel !== model ? [fallbackModel] : [])];
 
-        const toolCalls = msg.tool_calls?.map((tc) => ({
-            id: tc.id,
-            name: tc.function.name,
-            arguments: JSON.parse(tc.function.arguments || '{}') as Record<string, unknown>,
-        }));
+    let lastErr: unknown;
+    for (const modelName of models) {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                const res = await getOpenRouterClient().chat.completions.create({
+                    ...baseParams,
+                    model: modelName,
+                });
+                const choice = res.choices[0];
+                const msg = choice.message;
 
-        return {
-            content: msg.content ?? '',
-            toolCalls,
-        };
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes('No endpoints found that support tool use')) {
-            throw new Error(
-                `El modelo "${model}" no soporta tools en OpenRouter. Configura OPENROUTER_TOOLS_MODEL con uno compatible (ej: anthropic/claude-3.5-sonnet).`
-            );
+                const toolCalls = msg.tool_calls?.map((tc) => ({
+                    id: tc.id,
+                    name: tc.function.name,
+                    arguments: JSON.parse(tc.function.arguments || '{}') as Record<string, unknown>,
+                }));
+
+                return {
+                    content: msg.content ?? '',
+                    toolCalls,
+                };
+            } catch (err) {
+                lastErr = err;
+                const msg = err instanceof Error ? err.message : String(err);
+                if (msg.includes('No endpoints found that support tool use')) {
+                    throw new Error(
+                        `El modelo "${modelName}" no soporta tools en OpenRouter. Configura OPENROUTER_TOOLS_MODEL con uno compatible (ej: anthropic/claude-3.5-sonnet).`
+                    );
+                }
+                if (!isRateLimitError(err)) throw err;
+                logger.warn(
+                    `[llm] OpenRouter 429 en ${modelName} (intento ${attempt + 1}/${retries + 1})`
+                );
+                if (attempt >= retries) break;
+                await sleep(700 * (attempt + 1));
+            }
         }
-        throw err;
     }
+
+    throw new Error(
+        `OpenRouter rate-limited tras reintentos (${models.join(' -> ')}). Prueba en unos segundos o cambia de proveedor/modelo. Detalle: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`
+    );
 }
 
 async function callHermes(messages: ChatMessage[], tools?: LLMTool[]): Promise<LLMResponse> {
