@@ -64,10 +64,20 @@ function useSupabaseFromEnv(): boolean {
  */
 export async function initMemory(): Promise<void> {
     if (backend !== undefined) return;
+    const hasUrl = Boolean(process.env.SUPABASE_URL?.trim());
+    const hasKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
+    logger.info(`[memory] SUPABASE_URL=${hasUrl ? 'SET' : 'MISSING'} SUPABASE_SERVICE_ROLE_KEY=${hasKey ? 'SET' : 'MISSING'}`);
     if (useSupabaseFromEnv()) {
-        await initSupabaseMemory();
-        backend = 'supabase';
-        logger.info('[memory] backend: supabase (Postgres)');
+        try {
+            await initSupabaseMemory();
+            backend = 'supabase';
+            logger.info('[memory] backend: supabase (Postgres)');
+        } catch (err) {
+            logger.error('[memory] Supabase init falló, usando SQLite como fallback:', err instanceof Error ? err.message : String(err));
+            await initSqliteMemory();
+            backend = 'sqlite';
+            logger.info('[memory] backend: sqlite (agent_memory.db) — FALLBACK');
+        }
     } else {
         await initSqliteMemory();
         backend = 'sqlite';
