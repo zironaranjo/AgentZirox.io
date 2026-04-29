@@ -115,8 +115,12 @@ type KieRecordData = {
 
 async function kieGenerateImageUrl(prompt: string, kieSize: '1:1' | '3:2' | '2:3'): Promise<string> {
     const apiKey = getKieKey();
-    const generatePaths = ['/api/v1/gpt-4o-image/generate', '/api/v1/gpt4o-image/generate'];
-    const recordInfoPaths = ['/api/v1/gpt-4o-image/record-info', '/api/v1/gpt4o-image/record-info'];
+    // KIE_IMAGE_MODEL permite cambiar el modelo sin tocar código (ej: flux, ideogram, gpt4o-image)
+    const kieModel = (process.env.KIE_IMAGE_MODEL?.trim() || 'gpt4o-image').replace(/^\/+/, '');
+    const generatePaths = [`/api/v1/${kieModel}/generate`];
+    // Mantener compatibilidad con el nombre con guion (gpt-4o-image → gpt4o-image)
+    if (kieModel === 'gpt4o-image') generatePaths.unshift('/api/v1/gpt-4o-image/generate');
+    const recordInfoPaths = generatePaths.map(p => p.replace('/generate', '/record-info'));
 
     let taskId = '';
     let chosenRecordInfoPath = recordInfoPaths[0];
@@ -205,9 +209,8 @@ async function kieGenerateImageUrl(prompt: string, kieSize: '1:1' | '3:2' | '2:3
         }
         if (d.successFlag === 2) {
             logger.error(`[KIE] successFlag=2 raw=${infoRaw.slice(0, 600)}`);
-            throw new Error(
-                `Kie generacion fallida: ${d.errorMessage ?? 'sin detalle'}`
-            );
+            const detail = d.errorMessage ?? (d as Record<string, unknown>)['status'] ?? 'sin detalle';
+            throw new Error(`Kie generacion fallida: ${detail}`);
         }
         await sleep(intervalMs);
     }
