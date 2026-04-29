@@ -106,118 +106,108 @@ async function openAiCreateImage(
     return { url, revised_prompt: data.data?.[0]?.revised_prompt };
 }
 
-type KieRecordData = {
-    successFlag: number;
-    errorMessage?: string | null;
-    response?: { result_urls?: string[] } | null;
-    progress?: string | null;
+type KieTaskData = {
+    taskId?: string;
+    state?: string;
+    resultJson?: string;
+    failCode?: string;
+    failMsg?: string;
 };
 
 async function kieGenerateImageUrl(prompt: string, kieSize: '1:1' | '3:2' | '2:3'): Promise<string> {
     const apiKey = getKieKey();
-    // KIE_IMAGE_MODEL permite cambiar el modelo sin tocar código (ej: flux, ideogram, gpt4o-image)
-    const kieModel = (process.env.KIE_IMAGE_MODEL?.trim() || 'gpt4o-image').replace(/^\/+/, '');
-    const generatePaths = [`/api/v1/${kieModel}/generate`];
-    // Mantener compatibilidad con el nombre con guion (gpt-4o-image → gpt4o-image)
-    if (kieModel === 'gpt4o-image') generatePaths.unshift('/api/v1/gpt-4o-image/generate');
-    const recordInfoPaths = generatePaths.map(p => p.replace('/generate', '/record-info'));
+    // KIE_IMAGE_MODEL: modelo a usar (default: flux-2/pro-text-to-image)
+    const kieModel = (process.env.KIE_IMAGE_MODEL?.trim() || 'flux-2/pro-text-to-image');
 
-    let taskId = '';
-    let chosenRecordInfoPath = recordInfoPaths[0];
-    let lastGenerateErr = '';
-    for (let i = 0; i < generatePaths.length; i++) {
-        const p = generatePaths[i];
-        const genRes = await fetch(`${KIE_BASE}${p}`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
+    // 1. Crear tarea
+    const createRes = await fetch(`${KIE_BASE}/api/v1/jobs/createTask`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            model: kieModel,
+            input: {
+                prompt: prompt.slice(0, 5000),
+                aspect_ratio: kieSize,
+                resolution: '1K',
+                nsfw_checker: false,
             },
-            body: JSON.stringify({
-                prompt: prompt.slice(0, 4000),
-                size: kieSize,
-                nVariants: 1,
-            }),
-        });
+        }),
+    });
 
-        const genRaw = await genRes.text();
-        logger.info(`[KIE] generate status=${genRes.status} path=${p} body=${genRaw.slice(0, 400)}`);
-        let genJson: { code?: number; msg?: string; data?: { taskId?: string } };
-        try {
-            genJson = JSON.parse(genRaw) as typeof genJson;
-        } catch {
-            lastGenerateErr = `Kie generate no JSON en ${p}: ${genRaw.slice(0, 250)}`;
-            logger.error(`[KIE] ${lastGenerateErr}`);
-            continue;
-        }
-        if (genRes.ok && genJson.code === 200 && genJson.data?.taskId) {
-            taskId = genJson.data.taskId;
-            chosenRecordInfoPath = recordInfoPaths[i] ?? recordInfoPaths[0];
-            break;
-        }
-        lastGenerateErr = `Kie generate fallo en ${p}: ${genJson.msg ?? genRes.status} ${genRaw.slice(0, 250)}`;
-        logger.error(`[KIE] ${lastGenerateErr}`);
-    }
-    if (!taskId) {
-        const err = lastGenerateErr || 'Kie generate fallo en todas las rutas conocidas.';
-        logger.error(`[KIE] Sin taskId: ${err}`);
-        throw new Error(err);
+    const createRaw = await createRes.text();
+    logger.info(`[KIE] createTask status=${createRes.status} body=${createRaw.slice(0, 400)}`);
+
+    let createJson: { code?: number; msg?: string; data?: { taskId?: string } };
+    try {
+        createJson = JSON.parse(createRaw) as typeof createJson;
+    } catch {
+        throw new Error(`KIE createTask no JSON: ${createRaw.slice(0, 250)}`);
     }
 
-    // Avisar al usuario que la generación está en curso (KIE puede tardar 1-2 min)
+    if (!createRes.ok || createJson.code !== 200 || !createJson.data?.taskId) {
+        throw new Error(`KIE createTask fallo (${createRes.status}): ${createJson.msg ?? createRaw.slice(0, 250)}`);
+    }
+
+    const taskId = createJson.data.taskId;
+
+    // 2. Avisar al usuario que está en curso
     const tctxEarly = getToolContext();
     if (tctxEarly?.chatId) {
         sendTelegramChatMessage(
             tctxEarly.chatId,
             '🎨 Generando imagen con Kie.ai... puede tardar 1-2 minutos, ahora te la mando.'
-        ).catch(() => {/* ignorar si falla el aviso */});
+        ).catch(() => {});
     }
 
-    const maxMs = Math.min(
-        600_000,
-        Math.max(30_000, parseInt(process.env.KIE_IMAGE_POLL_MAX_MS ?? '180000', 10) || 180_000)
-    );
-    const intervalMs = Math.min(
-        15_000,
-        Math.max(2000, parseInt(process.env.KIE_IMAGE_POLL_INTERVAL_MS ?? '3000', 10) || 3000)
-    );
+    // 3. Polling hasta completar
+    const maxMs = Math.min(600_000, Math.max(30_000, parseInt(process.env.KIE_IMAGE_POLL_MAX_MS ?? '180000', 10) || 180_000));
+    const intervalMs = Math.min(15_000, Math.max(3000, parseInt(process.env.KIE_IMAGE_POLL_INTERVAL_MS ?? '5000', 10) || 5000));
     const start = Date.now();
 
     while (Date.now() - start < maxMs) {
-        const infoUrl = `${KIE_BASE}${chosenRecordInfoPath}?taskId=${encodeURIComponent(taskId)}`;
-        const infoRes = await fetch(infoUrl, {
+        await sleep(intervalMs);
+
+        const infoRes = await fetch(`${KIE_BASE}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
             headers: { Authorization: `Bearer ${apiKey}` },
         });
         const infoRaw = await infoRes.text();
-        logger.info(`[KIE] record-info status=${infoRes.status} body=${infoRaw.slice(0, 600)}`);
-        let infoJson: { code?: number; msg?: string; data?: KieRecordData };
+        logger.info(`[KIE] recordInfo status=${infoRes.status} body=${infoRaw.slice(0, 600)}`);
+
+        let infoJson: { code?: number; msg?: string; data?: KieTaskData };
         try {
             infoJson = JSON.parse(infoRaw) as typeof infoJson;
         } catch {
-            throw new Error(`Kie record-info no JSON: ${infoRaw.slice(0, 400)}`);
-        }
-        if (!infoRes.ok || infoJson.code !== 200 || !infoJson.data) {
-            throw new Error(`Kie record-info: ${infoJson.msg ?? infoRes.status}`);
+            throw new Error(`KIE recordInfo no JSON: ${infoRaw.slice(0, 400)}`);
         }
 
-        const d = infoJson.data;
-        if (d.successFlag === 1) {
-            const urls = d.response?.result_urls;
-            const first = urls?.[0];
-            if (!first) throw new Error('Kie termino pero sin result_urls.');
+        if (!infoRes.ok || infoJson.code !== 200 || !infoJson.data) {
+            throw new Error(`KIE recordInfo error: ${infoJson.msg ?? infoRes.status}`);
+        }
+
+        const { state, resultJson, failMsg, failCode } = infoJson.data;
+
+        if (state === 'success') {
+            let urls: string[] = [];
+            try {
+                urls = (JSON.parse(resultJson ?? '{}') as { resultUrls?: string[] }).resultUrls ?? [];
+            } catch { /* ignorar parse error */ }
+            const first = urls[0];
+            if (!first) throw new Error('KIE completó pero sin resultUrls en resultJson.');
             return first;
         }
-        if (d.successFlag === 2) {
-            logger.error(`[KIE] successFlag=2 raw=${infoRaw.slice(0, 600)}`);
-            const detail = d.errorMessage ?? (d as Record<string, unknown>)['status'] ?? 'sin detalle';
-            throw new Error(`Kie generacion fallida: ${detail}`);
+
+        if (state === 'Fallar' || state === 'fail' || state === 'failed') {
+            logger.error(`[KIE] task failed: ${infoRaw.slice(0, 600)}`);
+            throw new Error(`KIE generación fallida: ${failMsg || failCode || state}`);
         }
-        await sleep(intervalMs);
+
+        // Estados en curso: Esperar, Cola, generatingGeneration → seguir polling
     }
 
-    throw new Error(
-        `Kie: tiempo de espera agotado (${maxMs} ms) para taskId ${taskId}.`
-    );
+    throw new Error(`KIE: tiempo de espera agotado (${maxMs}ms) para taskId ${taskId}.`);
 }
 
 function isKieTimeoutError(err: unknown): err is Error {
