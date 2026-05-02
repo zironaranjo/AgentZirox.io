@@ -4,6 +4,7 @@ import { registerTool } from '../core/dispatcher';
 import { insertLinkedInPendingPost } from '../core/memory';
 import { getToolContext } from '../core/tool-context';
 import { isLinkedInOAuthConfigured } from '../integrations/linkedin/linkedin-api';
+import { sendTelegramChatMessage } from '../integrations/telegram/send-message';
 import { getWorkspaceBaseDir, resolveSafeWorkspacePath } from './workspace-utils';
 
 const DRAFTS_DIR = 'linkedin/drafts';
@@ -180,6 +181,12 @@ registerTool({
         const visibility = visRaw === 'CONNECTIONS' ? 'CONNECTIONS' : 'PUBLIC';
         const imageUrl = imageRaw?.trim() ? assertPublicHttpsImageUrl(imageRaw) : null;
         const id = await insertLinkedInPendingPost(tctx.chatId, text, visibility, imageUrl);
+
+        // Envío directo para que el ID siempre llegue aunque el LLM reescriba la respuesta
+        sendTelegramChatMessage(
+            tctx.chatId,
+            `📋 Post LinkedIn en cola — ID: *${id}*\nPara publicar: /li_approve ${id}\nPara cancelar: /li_reject ${id}`
+        ).catch(() => {/* no crítico */});
 
         const preview = text.length > 600 ? `${text.slice(0, 600)}…` : text;
 
