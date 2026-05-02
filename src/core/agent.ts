@@ -65,10 +65,18 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         '✅ Hecho.';
 
     // Detect if the LLM described calling a tool in text without actually calling it.
-    // Groq Llama sometimes writes "I called tool_name" instead of making a real tool call.
+    // Groq Llama sometimes writes about tool results instead of making real tool calls.
     if (executedToolResults.length === 0 && iterations === 0 && finalContent) {
         const toolNames = tools.map((t) => t.name);
-        const claimedToolUse = toolNames.some((name) => finalContent.includes(name));
+        // Check tool name mentions OR action phrases that imply a tool was used
+        const actionPhrases = [
+            '/li_approve', 'li_approve', 'encolado', 'cola de publicación', 'cola de publicacion',
+            'pendiente de aprobación', 'pendiente de aprobacion', 'schedule_task', 'programado',
+            'tarea programada', 'recordatorio programado',
+        ];
+        const claimedToolUse =
+            toolNames.some((name) => finalContent.includes(name)) ||
+            actionPhrases.some((phrase) => finalContent.toLowerCase().includes(phrase));
         if (claimedToolUse) {
             logger.warn('[agent] LLM described tool usage in text without calling it — retrying with correction');
             conversation.push({ role: 'assistant', content: finalContent });
