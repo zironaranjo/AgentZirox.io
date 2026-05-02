@@ -1,3 +1,0 @@
-module.exports=[48018,a=>{a.v({className:"outfit_43d50961-module__KOAtAG__className"})},27572,a=>{"use strict";var b=a.i(7997),c=a.i(48018);let d={className:c.default.className,style:{fontFamily:"'Outfit', 'Outfit Fallback'",fontStyle:"normal"}};function e({children:a}){return(0,b.jsx)("html",{lang:"es",children:(0,b.jsx)("body",{className:`${d.className} antialiased`,children:a})})}null!=c.default.variable&&(d.variable=c.default.variable),a.s(["default",()=>e,"metadata",0,{title:"Ziro - Sistema Central",description:"Personal AI Agent — Terminal Neuronal Segura"}],27572)}];
-
-//# sourceMappingURL=%5Broot-of-the-server%5D__9baa265f._.js.map
