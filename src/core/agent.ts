@@ -31,6 +31,10 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
     let iterations = 0;
     const MAX_ITERATIONS = 5;
     const executedToolResults: string[] = [];
+    const executedToolNames: string[] = [];
+
+    // Tools whose results must be shown verbatim — LLM rewrite tends to drop critical info (e.g. post ID)
+    const DIRECT_RESULT_TOOLS = new Set(['linkedin_propose_post']);
 
     while (response.toolCalls && response.toolCalls.length > 0 && iterations < MAX_ITERATIONS) {
         iterations++;
@@ -47,6 +51,7 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
             const result = await executeTool(tc.name, tc.arguments);
             logger.info(`🔧 Tool [${tc.name}] result:`, result.substring(0, 200));
             executedToolResults.push(result);
+            executedToolNames.push(tc.name);
             // Add tool result back into conversation context
             toolResults.push({
                 role: 'user',
@@ -91,12 +96,20 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
                     const result = await executeTool(tc.name, tc.arguments);
                     logger.info(`🔧 Tool (retry) [${tc.name}] result:`, result.substring(0, 200));
                     executedToolResults.push(result);
+                    executedToolNames.push(tc.name);
                     conversation.push({ role: 'user', content: `[Tool Result: ${tc.name}]\n${result}` });
                 }
                 const finalRetry = await callLLM(conversation, tools);
                 finalContent = finalRetry.content?.trim() || executedToolResults[executedToolResults.length - 1] || '✅ Hecho.';
             }
         }
+    }
+
+    // For tools that carry critical structured data (post ID, etc.), bypass LLM rewrite
+    // and return the tool result directly so the user always sees the exact ID and commands.
+    const directIdx = executedToolNames.findIndex((n) => DIRECT_RESULT_TOOLS.has(n));
+    if (directIdx !== -1 && executedToolResults[directIdx]) {
+        finalContent = executedToolResults[directIdx];
     }
 
     await saveMessage(chatId, 'assistant', finalContent);
