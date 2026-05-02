@@ -183,9 +183,11 @@ registerTool({
         const id = await insertLinkedInPendingPost(tctx.chatId, text, visibility, imageUrl);
 
         // Envío directo para que el ID siempre llegue aunque el LLM reescriba la respuesta
+        // Sin parse_mode Markdown para evitar que _ en comandos se interprete como cursiva
         sendTelegramChatMessage(
             tctx.chatId,
-            `📋 Post LinkedIn en cola — ID: *${id}*\nPara publicar: /li_approve ${id}\nPara cancelar: /li_reject ${id}`
+            `📋 Post LinkedIn en cola — ID: ${id}\nPara publicar: /li_approve ${id}\nPara cancelar: /li_reject ${id}`,
+            false
         ).catch(() => {/* no crítico */});
 
         const preview = text.length > 600 ? `${text.slice(0, 600)}…` : text;
