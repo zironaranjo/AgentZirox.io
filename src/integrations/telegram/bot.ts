@@ -133,11 +133,15 @@ export async function startTelegramBot() {
         }
         await ctx.reply('⏳ Publicando en LinkedIn…');
         try {
-            const result = await publishLinkedInFeedPost(
+            const publishPromise = publishLinkedInFeedPost(
                 row.body,
                 row.visibility === 'CONNECTIONS' ? 'CONNECTIONS' : 'PUBLIC',
                 row.image_url
             );
+            const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout: LinkedIn API no respondió en 30s')), 30_000)
+            );
+            const result = await Promise.race([publishPromise, timeoutPromise]);
             const ref = result.restLiId ?? result.rawBody ?? 'ok';
             await setLinkedInPendingPublished(id, ref);
             const msg = result.restLiId
@@ -150,12 +154,11 @@ export async function startTelegramBot() {
                 ? String((err as NodeJS.ErrnoException).cause)
                 : '';
             logger.error(`[LinkedIn] li_approve error: ${msg}${cause ? ` | cause: ${cause}` : ''}`);
-            // Solo marcar como fallido si es error definitivo de LinkedIn (4xx/5xx)
-            // Si es error de red (fetch failed), dejar pending para poder reintentar
             const isNetworkError = msg.toLowerCase().includes('fetch failed') ||
                 msg.toLowerCase().includes('econnrefused') ||
                 msg.toLowerCase().includes('enotfound') ||
-                msg.toLowerCase().includes('etimedout');
+                msg.toLowerCase().includes('etimedout') ||
+                msg.toLowerCase().includes('timeout');
             if (!isNetworkError) {
                 await setLinkedInPendingFailed(id, msg);
             }
