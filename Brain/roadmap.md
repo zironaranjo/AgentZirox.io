@@ -1,6 +1,6 @@
 # 🗺️ Ziro — Roadmap hacia un Agente Profesional
 
-> Estado actual: Agente operativo en Telegram + Web, con workspace, voz e imagen ✅  
+> Estado actual: Agente operativo con LinkedIn, imágenes IA, tareas programadas y memoria persistente en Supabase ✅  
 > Objetivo: Sistema autónomo para productividad, clientes y operaciones de contenido
 
 ---
@@ -21,6 +21,8 @@
 - [x] Soporte de notas de voz/audio Telegram con transcripción
 - [x] Soporte de imagen Telegram (analisis con OpenRouter Vision)
 - [x] Tools Google Drive/Gmail para crear carpeta y archivar correos
+- [x] Google Sheets: nota rápida en lenguaje natural (`google_sheets_quick_note`) y crear/leer/escribir hojas
+- [x] Google Calendar: listar y crear eventos desde el chat (`google_calendar_*`)
 - [x] Fallback anti-error Markdown en Telegram para mensajes dinamicos
 - [x] Respuesta final del agente basada en resultado real de tools (no solo "Hecho")
 
@@ -43,8 +45,8 @@
 > *Lo que distingue a un chatbot de un verdadero agente*
 
 ### 🧠 Skills de Inteligencia
-- [ ] **Búsqueda en internet en tiempo real**  
-  Integrar Tavily API o Serper.dev para que Ziro pueda buscar información actualizada.
+- [x] **Búsqueda en internet en tiempo real**  
+  Tool `web_search` operativa.
 
 - [ ] **Lectura y resumen de URLs/PDFs**  
   Dar a Ziro la capacidad de leer un enlace o documento y resumirlo.
@@ -56,11 +58,11 @@
   Permitir a Ziro escribir y ejecutar código Python/JavaScript en una sandbox segura para cálculos, análisis de datos, etc.
 
 ### 📅 Skills de Productividad
-- [ ] **Google Calendar**  
-  Leer y crear eventos del calendario desde el chat.
+- [x] **Google Calendar (MVP)**  
+  Listar y crear eventos desde el chat. Pendiente de refinar: zonas horarias recurrentes, varios calendarios, UX de confirmación.
 
-- [ ] **Recordatorios y tareas**  
-  Sistema de tareas pendientes con notificaciones vía Telegram.
+- [x] **Recordatorios y tareas programadas**  
+  `schedule_task` con ticker interno cada 60s + notificaciones vía Telegram. Persiste en Supabase.
 
 - [ ] **Knowledge base personal persistente**  
   Consolidar capturas (`capturas/*.md`) con búsqueda semántica y etiquetas automáticas.
@@ -76,6 +78,9 @@
   Captura de ideas/tareas desde Instagram y sincronización al workspace.
 - [ ] **Webhooks entrantes**  
   Recibir eventos de servicios externos (GitHub, Stripe, cualquier API) y procesarlos con IA.
+
+- [x] **LinkedIn publishing**  
+  Flujo completo: `linkedin_propose_post` → `/li_approve N` → ugcPosts API. Con aprobación humana obligatoria, retry en errores de red y mensaje directo con el ID.
 
 - [ ] **Twitter/X automation**  
   Ziro puede redactar y publicar tweets o responder a menciones.
@@ -100,8 +105,11 @@
 - [ ] **Modo voz web (input + output)**  
   Captura por micrófono en web y respuesta con TTS opcional.
 
-- [ ] **Notificaciones proactivas**  
-  Ziro puede enviarte mensajes sin que tú preguntes (alertas, resúmenes diarios, etc.)
+- [x] **Notificaciones proactivas vía tareas programadas**  
+  El ticker ejecuta tareas vencidas y envía el resultado por Telegram sin que el usuario pregunte.
+
+- [ ] **Notificaciones proactivas avanzadas**  
+  Alertas basadas en eventos externos (precio de cripto, email importante, etc.)
 
 ---
 

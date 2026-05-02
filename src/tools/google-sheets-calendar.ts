@@ -11,7 +11,7 @@ import {
 registerTool({
     name: 'google_sheets_quick_note',
     description:
-        'Crear un Google Spreadsheet nuevo y guardar UNA nota en texto libre (lenguaje natural). Usar cuando el usuario diga algo como "crea una hoja con una nota", "anota que mañana voy al cine a las 8", sin pedir JSON ni rangos.',
+        'Crear un Google Spreadsheet nuevo y guardar UNA nota en texto libre. Usar cuando pidan crear hoja/Sheets en Drive con titulo (document_title) y un texto a guardar, o "crea notas y escribe...", "primera linea asi: ...". No usar para posts de LinkedIn ni marketing si el usuario hablo de Sheets.',
     parameters: {
         type: 'object',
         properties: {
