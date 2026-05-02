@@ -5,8 +5,17 @@ const USERINFO_URL = 'https://api.linkedin.com/v2/userinfo';
 const UGC_POSTS_URL = 'https://api.linkedin.com/v2/ugcPosts';
 const REGISTER_UPLOAD_URL = 'https://api.linkedin.com/v2/assets?action=registerUpload';
 const MAX_LINKEDIN_IMAGE_BYTES = 12 * 1024 * 1024;
+const LINKEDIN_TIMEOUT_MS = 20_000;
 
 const META_PERSON_URN = 'linkedin_person_urn';
+
+function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), LINKEDIN_TIMEOUT_MS);
+    return fetch(url, { ...options, signal: controller.signal }).finally(() =>
+        clearTimeout(timer)
+    );
+}
 
 let accessTokenCache: { token: string; expiresAtMs: number } | null = null;
 
@@ -49,7 +58,7 @@ async function refreshAccessToken(): Promise<string> {
         client_secret: clientSecret,
     });
 
-    const res = await fetch(TOKEN_URL, {
+    const res = await fetchWithTimeout(TOKEN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,
@@ -132,7 +141,7 @@ export async function getLinkedInPersonUrn(): Promise<string> {
     }
 
     const token = await getLinkedInAccessToken();
-    const res = await fetch(USERINFO_URL, {
+    const res = await fetchWithTimeout(USERINFO_URL, {
         headers: { Authorization: `Bearer ${token}` },
     });
     const raw = await res.text();
@@ -188,7 +197,7 @@ async function registerLinkedInFeedImageUpload(
         },
     };
 
-    const res = await fetch(REGISTER_UPLOAD_URL, {
+    const res = await fetchWithTimeout(REGISTER_UPLOAD_URL, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${token}`,
@@ -240,7 +249,7 @@ async function putBytesToLinkedInUpload(
         h.set('Content-Type', ct ?? 'application/octet-stream');
     }
 
-    const putRes = await fetch(uploadUrl, {
+    const putRes = await fetchWithTimeout(uploadUrl, {
         method: 'PUT',
         headers: h,
         body: new Uint8Array(bytes),
@@ -293,7 +302,7 @@ async function publishLinkedInPostWithImage(
         },
     };
 
-    const res = await fetch(UGC_POSTS_URL, {
+    const res = await fetchWithTimeout(UGC_POSTS_URL, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${token}`,
@@ -348,7 +357,7 @@ export async function publishLinkedInTextPost(
         },
     };
 
-    const res = await fetch(UGC_POSTS_URL, {
+    const res = await fetchWithTimeout(UGC_POSTS_URL, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${token}`,
