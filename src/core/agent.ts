@@ -59,10 +59,38 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         response = await callLLM(conversation, tools);
     }
 
-    const finalContent =
+    let finalContent =
         response.content?.trim() ||
         (executedToolResults.length > 0 ? executedToolResults[executedToolResults.length - 1] : '') ||
         '✅ Hecho.';
+
+    // Detect if the LLM described calling a tool in text without actually calling it.
+    // Groq Llama sometimes writes "I called tool_name" instead of making a real tool call.
+    if (executedToolResults.length === 0 && iterations === 0 && finalContent) {
+        const toolNames = tools.map((t) => t.name);
+        const claimedToolUse = toolNames.some((name) => finalContent.includes(name));
+        if (claimedToolUse) {
+            logger.warn('[agent] LLM described tool usage in text without calling it — retrying with correction');
+            conversation.push({ role: 'assistant', content: finalContent });
+            conversation.push({
+                role: 'user',
+                content:
+                    'SISTEMA: Describiste en texto que usaste una herramienta pero no la llamaste realmente mediante tool_calls. Debes LLAMAR la herramienta usando el mecanismo estructurado. Inténtalo de nuevo ahora.',
+            });
+            const retryResponse = await callLLM(conversation, tools);
+            if (retryResponse.toolCalls && retryResponse.toolCalls.length > 0) {
+                for (const tc of retryResponse.toolCalls) {
+                    const result = await executeTool(tc.name, tc.arguments);
+                    logger.info(`🔧 Tool (retry) [${tc.name}] result:`, result.substring(0, 200));
+                    executedToolResults.push(result);
+                    conversation.push({ role: 'user', content: `[Tool Result: ${tc.name}]\n${result}` });
+                }
+                const finalRetry = await callLLM(conversation, tools);
+                finalContent = finalRetry.content?.trim() || executedToolResults[executedToolResults.length - 1] || '✅ Hecho.';
+            }
+        }
+    }
+
     await saveMessage(chatId, 'assistant', finalContent);
     return finalContent;
 }
