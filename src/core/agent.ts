@@ -134,6 +134,40 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
             const retryResponse = await callLLM(conversation, tools);
             if (retryResponse.toolCalls && retryResponse.toolCalls.length > 0) {
                 for (const tc of retryResponse.toolCalls) {
+                    // Same image URL fix as main loop — retry path is equally vulnerable to invented URLs
+                    if (tc.name === 'linkedin_propose_post' && tc.arguments.image_url) {
+                        let realImageUrl: string | null = null;
+                        const genIdx = executedToolNames.indexOf('generate_image');
+                        if (genIdx !== -1) {
+                            const m = executedToolResults[genIdx].match(/🔗\s*(https:\/\/\S+)/);
+                            if (m) realImageUrl = m[1];
+                        }
+                        if (!realImageUrl) {
+                            for (let i = conversation.length - 1; i >= 0; i--) {
+                                const msg = conversation[i];
+                                if (msg.role === 'user' && msg.content.includes('[Tool Result: generate_image]')) {
+                                    const m = msg.content.match(/🔗\s*(https:\/\/\S+)/);
+                                    if (m) { realImageUrl = m[1]; break; }
+                                }
+                            }
+                        }
+                        if (realImageUrl) {
+                            const currentUrl = String(tc.arguments.image_url).trim();
+                            if (currentUrl !== realImageUrl) {
+                                logger.warn(`[agent] (retry) Corrigiendo image_url "${currentUrl.slice(0, 60)}" → "${realImageUrl.slice(0, 60)}"`);
+                                tc.arguments = { ...tc.arguments, image_url: realImageUrl };
+                            }
+                        } else {
+                            const rawUrl = String(tc.arguments.image_url).trim();
+                            let isValidHttps = false;
+                            try { isValidHttps = new URL(rawUrl).protocol === 'https:'; } catch { /* invalid */ }
+                            if (!isValidHttps) {
+                                logger.warn(`[agent] (retry) image_url inválida sin generate_image de respaldo; se omite imagen`);
+                                const { image_url: _drop, ...rest } = tc.arguments;
+                                tc.arguments = rest;
+                            }
+                        }
+                    }
                     const result = await executeTool(tc.name, tc.arguments);
                     logger.info(`🔧 Tool (retry) [${tc.name}] result:`, result.substring(0, 200));
                     executedToolResults.push(result);
