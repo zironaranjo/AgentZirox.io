@@ -1,4 +1,5 @@
 import { mkdir, readdir, stat, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { registerTool } from '../core/dispatcher';
 import {
@@ -188,8 +189,27 @@ registerTool({
         }
 
         const visibility = visRaw === 'CONNECTIONS' ? 'CONNECTIONS' : 'PUBLIC';
-        const imageUrl = imageRaw?.trim() ? assertPublicHttpsImageUrl(imageRaw) : null;
-        const id = await insertLinkedInPendingPost(tctx.chatId, text, visibility, imageUrl);
+
+        // Download image immediately — KIE/GCS URLs expire in seconds, so cache to disk.
+        let resolvedImageUrl: string | null = null;
+        if (imageRaw?.trim()) {
+            const validated = assertPublicHttpsImageUrl(imageRaw);
+            try {
+                const imgRes = await fetch(validated, { redirect: 'follow' });
+                if (imgRes.ok) {
+                    const buf = Buffer.from(await imgRes.arrayBuffer());
+                    const tmpPath = `/tmp/li_img_${randomUUID()}.bin`;
+                    await writeFile(tmpPath, buf);
+                    resolvedImageUrl = `file://${tmpPath}`;
+                } else {
+                    resolvedImageUrl = validated; // fallback, will fail at publish but not silently wrong
+                }
+            } catch {
+                resolvedImageUrl = validated;
+            }
+        }
+
+        const id = await insertLinkedInPendingPost(tctx.chatId, text, visibility, resolvedImageUrl);
 
         // Envío directo para que el ID siempre llegue aunque el LLM reescriba la respuesta
         // Sin parse_mode Markdown para evitar que _ en comandos se interprete como cursiva
@@ -203,7 +223,7 @@ registerTool({
 
         return [
             `📋 **Publicacion LinkedIn pendiente de tu aprobacion** — id \`${id}\``,
-            `Visibilidad: **${visibility}**${imageUrl ? '\n🖼️ Incluye **imagen** (se adjuntara al publicar).' : ''}`,
+            `Visibilidad: **${visibility}**${resolvedImageUrl ? '\n🖼️ Incluye **imagen** (se adjuntara al publicar).' : ''}`,
             '',
             '---',
             preview,

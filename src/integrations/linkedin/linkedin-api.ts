@@ -1,3 +1,4 @@
+import { readFile, unlink } from 'node:fs/promises';
 import { getMeta, setMeta } from '../../core/memory';
 
 const TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken';
@@ -268,16 +269,26 @@ async function publishLinkedInPostWithImage(
     const token = await getLinkedInAccessToken();
     const author = await getLinkedInPersonUrn();
 
-    const imgRes = await fetchWithTimeout(imageUrl, { redirect: 'follow' });
-    if (!imgRes.ok) {
-        throw new Error(`No se pudo descargar la imagen (${imgRes.status}) desde la URL.`);
+    let buf: Buffer;
+    let dlCt: string | null = null;
+
+    if (imageUrl.startsWith('file://')) {
+        // Image was cached to disk at propose time to avoid URL expiry
+        const filePath = imageUrl.slice('file://'.length);
+        buf = await readFile(filePath);
+        unlink(filePath).catch(() => {});
+    } else {
+        const imgRes = await fetchWithTimeout(imageUrl, { redirect: 'follow' });
+        if (!imgRes.ok) {
+            throw new Error(`No se pudo descargar la imagen (${imgRes.status}) desde la URL.`);
+        }
+        buf = Buffer.from(await imgRes.arrayBuffer());
+        dlCt = imgRes.headers.get('content-type')?.split(';')[0]?.trim() ?? null;
     }
-    const buf = Buffer.from(await imgRes.arrayBuffer());
+
     if (buf.length > MAX_LINKEDIN_IMAGE_BYTES) {
         throw new Error(`Imagen demasiado grande (${buf.length} bytes). Max ~12 MB.`);
     }
-
-    const dlCt = imgRes.headers.get('content-type')?.split(';')[0]?.trim() ?? null;
 
     const { uploadUrl, asset, uploadHeaders } = await registerLinkedInFeedImageUpload(token, author);
     await putBytesToLinkedInUpload(uploadUrl, uploadHeaders, buf, dlCt);
