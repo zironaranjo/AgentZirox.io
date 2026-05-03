@@ -119,6 +119,9 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
             '/li_approve', 'li_approve', 'encolado', 'cola de publicación', 'cola de publicacion',
             'pendiente de aprobación', 'pendiente de aprobacion', 'schedule_task', 'programado',
             'tarea programada', 'recordatorio programado',
+            // LinkedIn approval hallucination patterns
+            'publicando el post', 'publicando en linkedin', 'publicando ahora', 'voy a publicar',
+            'estoy publicando', 'he publicado', 'publicaré', 'ya está publicado',
         ];
         const claimedToolUse =
             toolNames.some((name) => finalContent.includes(name)) ||

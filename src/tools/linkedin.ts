@@ -8,6 +8,7 @@ import {
     listLinkedInPendingPostsForChat,
     setLinkedInPendingPublished,
     setLinkedInPendingFailed,
+    setLinkedInPendingRejected,
 } from '../core/memory';
 import { getToolContext } from '../core/tool-context';
 import {
@@ -352,5 +353,46 @@ registerTool({
             await setLinkedInPendingFailed(row.id, msg);
             return `❌ Error al publicar: ${msg}`;
         }
+    },
+});
+
+registerTool({
+    name: 'reject_linkedin_post',
+    description:
+        'Cancelar/rechazar un post LinkedIn pendiente. Usar cuando el usuario diga "cancela", "elimina", "borra", "no lo publiques", "rechaza" o pida limpiar la cola de posts. Si no se indica id, rechaza todos los pendientes de este chat.',
+    parameters: {
+        type: 'object',
+        properties: {
+            post_id: {
+                type: 'number',
+                description: 'ID numérico del post a rechazar. Si se omite, rechaza todos los pendientes.',
+            },
+        },
+        required: [],
+    },
+    handler: async (args) => {
+        const tctx = getToolContext();
+        if (!tctx?.chatId) {
+            throw new Error('reject_linkedin_post solo está disponible en Telegram.');
+        }
+        const chatId = tctx.chatId;
+
+        if ((args as { post_id?: number }).post_id) {
+            const id = Number((args as { post_id?: number }).post_id);
+            const row = await getLinkedInPendingPostForChat(id, chatId);
+            if (!row || row.status !== 'pending') {
+                return `No existe la propuesta #${id} pendiente en este chat.`;
+            }
+            await setLinkedInPendingRejected(row.id);
+            return `🗑️ Post #${id} cancelado.`;
+        }
+
+        const rows = await listLinkedInPendingPostsForChat(chatId, 50);
+        const pending = rows.filter((r) => r.status === 'pending');
+        if (pending.length === 0) {
+            return 'No hay posts LinkedIn pendientes en este chat.';
+        }
+        await Promise.all(pending.map((r) => setLinkedInPendingRejected(r.id)));
+        return `🗑️ ${pending.length} post(s) cancelado(s): ${pending.map((r) => `#${r.id}`).join(', ')}.`;
     },
 });
