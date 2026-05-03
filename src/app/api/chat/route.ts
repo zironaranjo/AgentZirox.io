@@ -1,20 +1,29 @@
-import { NextResponse } from "next/server";
-import { logger } from "../../../core/logger";
+import { NextResponse } from 'next/server';
+import { processMessage } from '../../../core/agent';
+import { logger } from '../../../core/logger';
 
 export async function POST(req: Request) {
-  try {
-    const { message } = await req.json();
+    try {
+        const { message, chatId } = await req.json() as { message?: string; chatId?: string };
 
-    // Mock response so the user can test the chat interface right away.
-    // We can hook this up to the actual AI core next.
-    const reply = `He procesado tu mensaje vía Next.js: "${message}". Mi conexión directa al cerebro de IA estará lista muy pronto.`;
+        if (!message?.trim()) {
+            return NextResponse.json({ reply: 'Mensaje vacío.' }, { status: 400 });
+        }
 
-    return NextResponse.json({ reply });
-  } catch (error) {
-    logger.error("Error en /api/chat:", error);
-    return NextResponse.json(
-      { reply: "Error interno en mis sistemas neuronales." },
-      { status: 500 }
-    );
-  }
+        // Optional API secret for external clients (voice desktop app, etc.)
+        const secret = process.env.WEB_API_SECRET?.trim();
+        if (secret) {
+            const auth = req.headers.get('x-api-secret') ?? '';
+            if (auth !== secret) {
+                return NextResponse.json({ reply: 'No autorizado.' }, { status: 401 });
+            }
+        }
+
+        const resolvedChatId = chatId?.trim() || 'web';
+        const reply = await processMessage(resolvedChatId, message.trim());
+        return NextResponse.json({ reply });
+    } catch (error) {
+        logger.error('Error en /api/chat:', error);
+        return NextResponse.json({ reply: 'Error interno.' }, { status: 500 });
+    }
 }
