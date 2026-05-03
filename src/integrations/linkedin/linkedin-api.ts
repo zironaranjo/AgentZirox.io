@@ -268,7 +268,7 @@ async function publishLinkedInPostWithImage(
     const token = await getLinkedInAccessToken();
     const author = await getLinkedInPersonUrn();
 
-    const imgRes = await fetch(imageUrl, { redirect: 'follow' });
+    const imgRes = await fetchWithTimeout(imageUrl, { redirect: 'follow' });
     if (!imgRes.ok) {
         throw new Error(`No se pudo descargar la imagen (${imgRes.status}) desde la URL.`);
     }
