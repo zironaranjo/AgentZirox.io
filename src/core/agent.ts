@@ -21,6 +21,25 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
 
     // Build context from recent history
     const history = (await getHistory(chatId, 20)) as ChatMessage[];
+
+    // Fast path: if the user sends a bare approval and the last bot message proposed a LinkedIn post,
+    // call approve_linkedin_post directly — the LLM is too unreliable for this mechanic.
+    const isSimpleApproval = /^(si|sí|sip|dale|adelante|aprueba|aprobad[oa]|aprovad[oa]|hazlo|publícalo|publicalo|ok|okey|venga|vamos|perfecto|listo|aprobado|aprovado|aprobada|aprovada)[\s.!?]*$/i.test(userMessage.trim());
+    if (isSimpleApproval) {
+        let lastBotContent = '';
+        for (let i = history.length - 1; i >= 0; i--) {
+            if (history[i].role === 'assistant') { lastBotContent = history[i].content; break; }
+        }
+        const liApproveMatch = lastBotContent.match(/\/li_approve\s+(\d+)/);
+        if (liApproveMatch) {
+            const postId = parseInt(liApproveMatch[1], 10);
+            logger.info(`[agent] Fast-path approval for LinkedIn post #${postId}`);
+            const result = await executeTool('approve_linkedin_post', { post_id: postId });
+            await saveMessage(chatId, 'assistant', result);
+            return result;
+        }
+    }
+
     const conversation: ChatMessage[] = [...history];
     const tools = getToolDefinitions();
 
