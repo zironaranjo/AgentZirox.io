@@ -48,6 +48,27 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         // Execute each tool call and collect results
         const toolResults: ChatMessage[] = [];
         for (const tc of response.toolCalls) {
+            // Auto-fix: if linkedin_propose_post has a bad/placeholder image_url,
+            // try to recover the real URL from a generate_image result in this turn.
+            if (tc.name === 'linkedin_propose_post' && tc.arguments.image_url) {
+                const rawUrl = String(tc.arguments.image_url).trim();
+                let isValidUrl = false;
+                try { isValidUrl = new URL(rawUrl).protocol === 'https:'; } catch { /* invalid */ }
+                if (!isValidUrl) {
+                    const genIdx = executedToolNames.indexOf('generate_image');
+                    if (genIdx !== -1) {
+                        const urlMatch = executedToolResults[genIdx].match(/https:\/\/\S+\.(?:png|jpg|jpeg|webp)/i);
+                        if (urlMatch) {
+                            logger.warn(`[agent] Corrigiendo image_url inválida "${rawUrl}" → "${urlMatch[0]}"`);
+                            tc.arguments = { ...tc.arguments, image_url: urlMatch[0] };
+                        } else {
+                            logger.warn(`[agent] image_url inválida y no se encontró URL en generate_image; se omite imagen`);
+                            const { image_url: _drop, ...rest } = tc.arguments;
+                            tc.arguments = rest;
+                        }
+                    }
+                }
+            }
             const result = await executeTool(tc.name, tc.arguments);
             logger.info(`🔧 Tool [${tc.name}] result:`, result.substring(0, 200));
             executedToolResults.push(result);

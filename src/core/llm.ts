@@ -1,6 +1,6 @@
 import Groq from 'groq-sdk';
 import OpenAI from 'openai';
-import { getUserProfileBlock, listPendingScheduledForChat } from './memory';
+import { getUserProfileBlock, listPendingScheduledForChat, listLinkedInPendingPostsForChat } from './memory';
 import { getToolContext } from './tool-context';
 import { logger } from './logger';
 
@@ -101,6 +101,19 @@ export async function buildSystemPrompt(): Promise<string> {
         }
     }
 
+    let pendingLinkedInBlock = '';
+    if (ctx?.chatId) {
+        try {
+            const liPosts = await listLinkedInPendingPostsForChat(ctx.chatId, 5);
+            if (liPosts.length > 0) {
+                const lines = liPosts.map((p) => `• #${p.id} (${p.visibility}) — ${p.body.slice(0, 80)}…`);
+                pendingLinkedInBlock = `\n\n---\n### Posts LinkedIn pendientes de aprobación\n${lines.join('\n')}\nSi el usuario pregunta o confirma uno de estos, dile el ID y el comando /li_approve N. NO los vuelvas a encolar.`;
+            }
+        } catch {
+            /* ignorar */
+        }
+    }
+
     const channel = ctx?.chatId ? 'Telegram' : 'web';
 
     return `Eres AgenteZirox, un agente de IA personal altamente capaz.
@@ -119,7 +132,7 @@ En Telegram SI puedes procesar audios/notas de voz porque el sistema los transcr
 Si el usuario pregunta por audios, responde que si puedes entenderlos por transcripcion automatica y ofrece ayudar con resumen, tareas o guardado.
 No digas que "no puedes procesar audio directamente" en este proyecto.
 Responde siempre en el idioma del usuario. Sé conciso, útil y proactivo.
-Fecha y hora actual: ${now}${profile}${pendingTasksBlock}`;
+Fecha y hora actual: ${now}${profile}${pendingTasksBlock}${pendingLinkedInBlock}`;
 }
 
 /**
