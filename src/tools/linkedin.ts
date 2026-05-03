@@ -1,9 +1,18 @@
 import { mkdir, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { registerTool } from '../core/dispatcher';
-import { insertLinkedInPendingPost } from '../core/memory';
+import {
+    insertLinkedInPendingPost,
+    getLinkedInPendingPostForChat,
+    listLinkedInPendingPostsForChat,
+    setLinkedInPendingPublished,
+    setLinkedInPendingFailed,
+} from '../core/memory';
 import { getToolContext } from '../core/tool-context';
-import { isLinkedInOAuthConfigured } from '../integrations/linkedin/linkedin-api';
+import {
+    isLinkedInOAuthConfigured,
+    publishLinkedInFeedPost,
+} from '../integrations/linkedin/linkedin-api';
 import { sendTelegramChatMessage } from '../integrations/telegram/send-message';
 import { getWorkspaceBaseDir, resolveSafeWorkspacePath } from './workspace-utils';
 
@@ -263,5 +272,65 @@ registerTool({
         );
 
         return ['📋 Borradores LinkedIn (mas recientes primero):', '', ...lines].join('\n');
+    },
+});
+
+registerTool({
+    name: 'approve_linkedin_post',
+    description:
+        'Publicar en LinkedIn un post pendiente de aprobación. Usar cuando el usuario diga "aprueba", "aprobado", "sí publícalo", "dale", "adelante", "publícalo ya" u otras frases de confirmación. Si no se indica id, usa el post pendiente más reciente de este chat.',
+    parameters: {
+        type: 'object',
+        properties: {
+            post_id: {
+                type: 'number',
+                description: 'ID numérico del post a aprobar. Si se omite, se usa el más reciente pendiente.',
+            },
+        },
+        required: [],
+    },
+    handler: async (args) => {
+        const tctx = getToolContext();
+        if (!tctx?.chatId) {
+            throw new Error('approve_linkedin_post solo está disponible en Telegram.');
+        }
+
+        if (!isLinkedInOAuthConfigured()) {
+            return '⚠️ LinkedIn OAuth no está configurado. Configura LINKEDIN_* en el servidor.';
+        }
+
+        const chatId = tctx.chatId;
+        let row;
+
+        if ((args as { post_id?: number }).post_id) {
+            const id = Number((args as { post_id?: number }).post_id);
+            row = await getLinkedInPendingPostForChat(id, chatId);
+            if (!row || (row.status !== 'pending' && row.status !== 'failed')) {
+                return `No existe la propuesta #${id} pendiente en este chat.`;
+            }
+        } else {
+            const rows = await listLinkedInPendingPostsForChat(chatId, 1);
+            row = rows[0];
+            if (!row) {
+                return 'No hay posts LinkedIn pendientes de aprobación en este chat.';
+            }
+        }
+
+        try {
+            const result = await publishLinkedInFeedPost(
+                row.body,
+                row.visibility === 'CONNECTIONS' ? 'CONNECTIONS' : 'PUBLIC',
+                row.image_url ?? undefined
+            );
+            const ref = result.restLiId ?? result.rawBody ?? 'ok';
+            await setLinkedInPendingPublished(row.id, ref);
+            return result.restLiId
+                ? `✅ Publicado en LinkedIn.\nRef: \`${result.restLiId}\``
+                : '✅ Publicado en LinkedIn.';
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            await setLinkedInPendingFailed(row.id, msg);
+            return `❌ Error al publicar: ${msg}`;
+        }
     },
 });

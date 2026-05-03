@@ -48,24 +48,44 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         // Execute each tool call and collect results
         const toolResults: ChatMessage[] = [];
         for (const tc of response.toolCalls) {
-            // Auto-fix: if linkedin_propose_post has a bad/placeholder image_url,
-            // try to recover the real URL from a generate_image result in this turn.
+            // Auto-fix: the LLM frequently invents image URLs for linkedin_propose_post.
+            // Always prefer the URL from generate_image — search current turn AND conversation history.
             if (tc.name === 'linkedin_propose_post' && tc.arguments.image_url) {
-                const rawUrl = String(tc.arguments.image_url).trim();
-                let isValidUrl = false;
-                try { isValidUrl = new URL(rawUrl).protocol === 'https:'; } catch { /* invalid */ }
-                if (!isValidUrl) {
-                    const genIdx = executedToolNames.indexOf('generate_image');
-                    if (genIdx !== -1) {
-                        const urlMatch = executedToolResults[genIdx].match(/https:\/\/\S+\.(?:png|jpg|jpeg|webp)/i);
-                        if (urlMatch) {
-                            logger.warn(`[agent] Corrigiendo image_url inválida "${rawUrl}" → "${urlMatch[0]}"`);
-                            tc.arguments = { ...tc.arguments, image_url: urlMatch[0] };
-                        } else {
-                            logger.warn(`[agent] image_url inválida y no se encontró URL en generate_image; se omite imagen`);
-                            const { image_url: _drop, ...rest } = tc.arguments;
-                            tc.arguments = rest;
+                let realImageUrl: string | null = null;
+
+                // 1. Current turn results
+                const genIdx = executedToolNames.indexOf('generate_image');
+                if (genIdx !== -1) {
+                    const m = executedToolResults[genIdx].match(/🔗\s*(https:\/\/\S+)/);
+                    if (m) realImageUrl = m[1];
+                }
+
+                // 2. Conversation history (image generated in a previous turn)
+                if (!realImageUrl) {
+                    for (let i = conversation.length - 1; i >= 0; i--) {
+                        const msg = conversation[i];
+                        if (msg.role === 'user' && msg.content.includes('[Tool Result: generate_image]')) {
+                            const m = msg.content.match(/🔗\s*(https:\/\/\S+)/);
+                            if (m) { realImageUrl = m[1]; break; }
                         }
+                    }
+                }
+
+                if (realImageUrl) {
+                    const currentUrl = String(tc.arguments.image_url).trim();
+                    if (currentUrl !== realImageUrl) {
+                        logger.warn(`[agent] Corrigiendo image_url "${currentUrl.slice(0, 60)}" → "${realImageUrl.slice(0, 60)}"`);
+                        tc.arguments = { ...tc.arguments, image_url: realImageUrl };
+                    }
+                } else {
+                    // No generate_image result found; validate the URL and drop if invalid
+                    const rawUrl = String(tc.arguments.image_url).trim();
+                    let isValidHttps = false;
+                    try { isValidHttps = new URL(rawUrl).protocol === 'https:'; } catch { /* invalid */ }
+                    if (!isValidHttps) {
+                        logger.warn(`[agent] image_url inválida sin generate_image de respaldo; se omite imagen`);
+                        const { image_url: _drop, ...rest } = tc.arguments;
+                        tc.arguments = rest;
                     }
                 }
             }
