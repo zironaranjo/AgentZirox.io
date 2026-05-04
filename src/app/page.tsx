@@ -26,6 +26,8 @@ export default function Home() {
   const [input, setInput]           = useState("");
   const [state, setState]           = useState<AgentState>("idle");
   const [showChat, setShowChat]     = useState(false);
+  const [transcript, setTranscript] = useState("");   // live caption shown on screen
+  const [lastReply, setLastReply]   = useState("");   // last bot reply shown below orb
   const messagesEndRef              = useRef<HTMLDivElement>(null);
   const recogRef                    = useRef<any>(null);
   const speakTimerRef               = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -34,9 +36,34 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Strip HTML tags for TTS
+  const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&[a-z]+;/g, " ").trim();
+
+  const speakText = useCallback((text: string) => {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(stripHtml(text));
+    utter.lang = "es-ES";
+    utter.rate = 1.05;
+    utter.pitch = 1;
+    // Prefer a Spanish voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const esVoice = voices.find(v => v.lang.startsWith("es")) ?? null;
+    if (esVoice) utter.voice = esVoice;
+    utter.onend = () => setState("idle");
+    utter.onerror = () => setState("idle");
+    window.speechSynthesis.speak(utter);
+  }, []);
+
+  // Voices may load async — pre-load on mount
+  useEffect(() => {
+    if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
+  }, []);
+
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || state === "thinking") return;
+    setTranscript("");
     setMessages(prev => [...prev, { text: trimmed, sender: "user" }]);
     setInput("");
     setState("thinking");
@@ -48,17 +75,21 @@ export default function Home() {
         body: JSON.stringify({ message: trimmed }),
       });
       const data = await res.json();
-      setMessages(prev => [...prev, { text: data.reply ?? "(sin respuesta)", sender: "bot" }]);
+      const reply = data.reply ?? "(sin respuesta)";
+      setMessages(prev => [...prev, { text: reply, sender: "bot" }]);
+      setLastReply(reply);
+      setShowChat(true);   // auto-open chat so user sees the response
       setState("speaking");
-      speakTimerRef.current = setTimeout(() => setState("idle"), 4000);
+      speakText(reply);    // read reply aloud
     } catch {
       setMessages(prev => [...prev, { text: "[Error de conexión]", sender: "bot" }]);
       setState("idle");
     }
-  }, [state]);
+  }, [state, speakText]);
 
   const startListening = useCallback(() => {
-    if (state === "thinking") return;
+    if (state === "thinking" || state === "speaking") return;
+    window.speechSynthesis?.cancel();
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) { setShowChat(true); return; }
 
@@ -67,12 +98,16 @@ export default function Home() {
     const r = new SR();
     r.lang = "es-ES";
     r.continuous = false;
-    r.interimResults = false;
+    r.interimResults = true;
     recogRef.current = r;
 
-    r.onstart  = () => { if (speakTimerRef.current) clearTimeout(speakTimerRef.current); setState("listening"); };
-    r.onresult = (e: any) => { const t = e.results[0][0].transcript; sendMessage(t); };
-    r.onerror  = () => setState("idle");
+    r.onstart  = () => { if (speakTimerRef.current) clearTimeout(speakTimerRef.current); setState("listening"); setTranscript(""); };
+    r.onresult = (e: any) => {
+      const interim = Array.from(e.results).map((res: any) => res[0].transcript).join("");
+      setTranscript(interim);
+      if (e.results[e.results.length - 1].isFinal) sendMessage(interim);
+    };
+    r.onerror  = () => { setState("idle"); setTranscript(""); };
     r.onend    = () => { if (state === "listening") setState("idle"); };
     r.start();
   }, [state, sendMessage]);
@@ -266,10 +301,45 @@ export default function Home() {
       {/* ── Status text ── */}
       <div style={{
         color: c.primary, fontSize: 13, fontWeight: 600, letterSpacing: 4,
-        textTransform: "uppercase", marginBottom: 36,
+        textTransform: "uppercase", marginBottom: 12,
         opacity: 0.9, transition: "color 0.6s ease",
       }}>
         {LABELS[state]}
+      </div>
+
+      {/* ── Live transcript / last reply caption ── */}
+      <div style={{
+        minHeight: 48, marginBottom: 20,
+        maxWidth: 480, width: "90%",
+        textAlign: "center",
+        transition: "opacity 0.4s ease",
+        opacity: (transcript || (state === "speaking" && lastReply)) ? 1 : 0,
+      }}>
+        {state === "listening" && transcript && (
+          <div style={{
+            color: "#e2e8f0", fontSize: 15, lineHeight: "1.5",
+            background: "rgba(14,165,233,0.12)",
+            border: "1px solid rgba(14,165,233,0.25)",
+            borderRadius: 14, padding: "8px 16px",
+            fontStyle: "italic",
+          }}>
+            "{transcript}"
+          </div>
+        )}
+        {state === "speaking" && lastReply && (
+          <div style={{
+            color: "#e2e8f0", fontSize: 14, lineHeight: "1.55",
+            background: "rgba(16,185,129,0.1)",
+            border: "1px solid rgba(16,185,129,0.2)",
+            borderRadius: 14, padding: "8px 16px",
+            display: "-webkit-box",
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: "vertical" as const,
+            overflow: "hidden",
+          }}
+            dangerouslySetInnerHTML={{ __html: lastReply }}
+          />
+        )}
       </div>
 
       {/* ── Mic button ── */}
