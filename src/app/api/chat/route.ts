@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { processMessage } from '../../../core/agent';
+import { initMemory } from '../../../core/memory';
 import { logger } from '../../../core/logger';
 
 export async function POST(req: Request) {
@@ -43,6 +44,7 @@ export async function POST(req: Request) {
             }
         }
 
+        await initMemory();
         const resolvedChatId = chatId?.trim() || 'web';
         const reply = await processMessage(resolvedChatId, message.trim());
         return NextResponse.json({ reply });
