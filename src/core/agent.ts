@@ -119,8 +119,13 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         (executedToolResults.length > 0 ? executedToolResults[executedToolResults.length - 1] : '') ||
         '✅ Hecho.';
 
-    // Return critical tool results verbatim (never let LLM rewrite post IDs, etc.)
-    const directIdx = executedToolNames.findIndex((n) => DIRECT_RESULT_TOOLS.has(n));
+    // Return critical tool results verbatim — use LAST occurrence so that if the agent
+    // retried and generated a new proposal (e.g. with image), that one wins over an earlier
+    // imageless attempt.
+    let directIdx = -1;
+    for (let i = executedToolNames.length - 1; i >= 0; i--) {
+        if (DIRECT_RESULT_TOOLS.has(executedToolNames[i])) { directIdx = i; break; }
+    }
     if (directIdx !== -1 && executedToolResults[directIdx]) {
         finalContent = executedToolResults[directIdx];
     }
