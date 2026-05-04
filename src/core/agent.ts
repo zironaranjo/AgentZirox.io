@@ -85,14 +85,16 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
             }
 
             conversation.push(...toolResults);
+            // Reset per tool-batch: each group of executed tools gets its own hallucination retry.
+            // This lets generate_image succeed and still retry if the LLM then forgets to call
+            // linkedin_propose_post in the very next response.
+            hallucinationRetried = false;
             response = await callLLM(conversation, tools);
 
         } else {
-            // No tool calls in this response.
-            // Detect hallucination on the first text response (before any tools ran).
-            // Only retry once to avoid infinite loops.
+            // No tool calls — detect hallucination and retry once per tool-execution phase.
             const content = response.content ?? '';
-            if (!hallucinationRetried && executedToolResults.length === 0) {
+            if (!hallucinationRetried) {
                 const claimedToolUse =
                     toolNames.some((name) => content.includes(name)) ||
                     ACTION_PHRASES.some((phrase) => content.toLowerCase().includes(phrase));
