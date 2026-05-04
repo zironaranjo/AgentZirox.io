@@ -25,12 +25,21 @@ export async function POST(req: Request) {
             return NextResponse.json({ reply: 'Mensaje vacío.' }, { status: 400 });
         }
 
-        // Optional API secret for external clients (voice desktop app, etc.)
+        // Optional API secret for external clients (Jarvis, etc.)
+        // Skip check for same-origin requests (the web UI at the same domain is always trusted)
         const secret = process.env.WEB_API_SECRET?.trim();
         if (secret) {
-            const auth = req.headers.get('x-api-secret') ?? '';
-            if (auth !== secret) {
-                return NextResponse.json({ reply: 'No autorizado.' }, { status: 401 });
+            const host     = req.headers.get('host') ?? '';
+            const referer  = req.headers.get('referer') ?? '';
+            const origin   = req.headers.get('origin') ?? '';
+            const isSameOrigin =
+                (referer  && (referer.startsWith(`https://${host}`) || referer.startsWith(`http://${host}`))) ||
+                (origin   && (origin  === `https://${host}`          || origin  === `http://${host}`));
+            if (!isSameOrigin) {
+                const auth = req.headers.get('x-api-secret') ?? '';
+                if (auth !== secret) {
+                    return NextResponse.json({ reply: 'No autorizado.' }, { status: 401 });
+                }
             }
         }
 
