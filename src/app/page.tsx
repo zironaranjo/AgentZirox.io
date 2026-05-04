@@ -26,8 +26,9 @@ export default function Home() {
   const [input, setInput]           = useState("");
   const [state, setState]           = useState<AgentState>("idle");
   const [showChat, setShowChat]     = useState(false);
-  const [transcript, setTranscript] = useState("");   // live caption shown on screen
-  const [lastReply, setLastReply]   = useState("");   // last bot reply shown below orb
+  const [transcript, setTranscript] = useState("");
+  const [lastReply, setLastReply]   = useState("");
+  const [micError, setMicError]     = useState("");
   const messagesEndRef              = useRef<HTMLDivElement>(null);
   const recogRef                    = useRef<any>(null);
   const speakTimerRef               = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,10 +92,11 @@ export default function Home() {
     if (state === "thinking" || state === "speaking") return;
     window.speechSynthesis?.cancel();
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { setShowChat(true); return; }
+    if (!SR) { setShowChat(true); setMicError("Tu navegador no soporta reconocimiento de voz. Usa Chrome."); return; }
 
     if (recogRef.current) { recogRef.current.abort(); recogRef.current = null; }
 
+    setMicError("");
     const r = new SR();
     r.lang = "es-ES";
     r.continuous = false;
@@ -107,8 +109,25 @@ export default function Home() {
       setTranscript(interim);
       if (e.results[e.results.length - 1].isFinal) sendMessage(interim);
     };
-    r.onerror  = () => { setState("idle"); setTranscript(""); };
-    r.onend    = () => { if (state === "listening") setState("idle"); };
+    r.onerror  = (e: any) => {
+      recogRef.current = null;
+      setState("idle");
+      setTranscript("");
+      const code: string = e.error ?? "";
+      if (code === "not-allowed" || code === "permission-denied")
+        setMicError("Permiso de micrófono denegado. Actívalo en la barra de Chrome.");
+      else if (code === "no-speech")
+        setMicError("No detecté voz. Habla más cerca del micrófono.");
+      else if (code === "network")
+        setMicError("Error de red. El reconocimiento de voz requiere conexión.");
+      else if (code !== "aborted")
+        setMicError(`Error de voz: ${code}`);
+    };
+    // Fix stale closure: use functional updater so we read current state
+    r.onend = () => {
+      recogRef.current = null;
+      setState(prev => prev === "listening" ? "idle" : prev);
+    };
     r.start();
   }, [state, sendMessage]);
 
@@ -370,6 +389,19 @@ export default function Home() {
       <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 11, letterSpacing: 2, marginBottom: 8 }}>
         {state === "listening" ? "SUELTA PARA ENVIAR" : "TOCA PARA HABLAR"}
       </div>
+
+      {micError && (
+        <div style={{
+          maxWidth: 360, width: "90%",
+          background: "rgba(239,68,68,0.12)",
+          border: "1px solid rgba(239,68,68,0.35)",
+          borderRadius: 12, padding: "8px 16px",
+          color: "#fca5a5", fontSize: 12, textAlign: "center",
+          marginBottom: 8,
+        }}>
+          ⚠️ {micError}
+        </div>
+      )}
 
       {/* ── Chat panel — slide up from bottom ── */}
       <div style={{
