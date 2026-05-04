@@ -135,7 +135,7 @@ function applyImageUrlFix(
     executedToolResults: string[],
     conversation: ChatMessage[]
 ): void {
-    if (tc.name !== 'linkedin_propose_post' || !tc.arguments.image_url) return;
+    if (tc.name !== 'linkedin_propose_post') return;
 
     let realImageUrl: string | null = null;
 
@@ -146,7 +146,7 @@ function applyImageUrlFix(
         if (m) realImageUrl = m[1];
     }
 
-    // 2. Conversation history (image generated in a previous turn)
+    // 2. Conversation history (image generated in a previous turn, e.g. LLM did two-step confirm)
     if (!realImageUrl) {
         for (let i = conversation.length - 1; i >= 0; i--) {
             const msg = conversation[i];
@@ -158,20 +158,23 @@ function applyImageUrlFix(
     }
 
     if (realImageUrl) {
-        const currentUrl = String(tc.arguments.image_url).trim();
+        // Inject or correct — covers both missing image_url AND wrong URL cases
+        const currentUrl = tc.arguments.image_url ? String(tc.arguments.image_url).trim() : null;
         if (currentUrl !== realImageUrl) {
-            logger.warn(`[agent] Corrigiendo image_url "${currentUrl.slice(0, 60)}" → "${realImageUrl.slice(0, 60)}"`);
+            logger.warn(`[agent] ${currentUrl ? 'Corrigiendo' : 'Inyectando'} image_url → "${realImageUrl.slice(0, 60)}"`);
             tc.arguments = { ...tc.arguments, image_url: realImageUrl };
         }
-    } else {
-        // No generate_image result — validate and drop invalid URLs to avoid ENOTFOUND at publish
-        const rawUrl = String(tc.arguments.image_url).trim();
-        let isValidHttps = false;
-        try { isValidHttps = new URL(rawUrl).protocol === 'https:'; } catch { /* invalid */ }
-        if (!isValidHttps) {
-            logger.warn('[agent] image_url inválida sin generate_image de respaldo; se omite imagen');
-            const { image_url: _drop, ...rest } = tc.arguments;
-            tc.arguments = rest;
-        }
+        return;
+    }
+
+    // No generate_image result — validate existing URL if any, drop invalid ones
+    if (!tc.arguments.image_url) return;
+    const rawUrl = String(tc.arguments.image_url).trim();
+    let isValidHttps = false;
+    try { isValidHttps = new URL(rawUrl).protocol === 'https:'; } catch { /* invalid */ }
+    if (!isValidHttps) {
+        logger.warn('[agent] image_url inválida sin generate_image de respaldo; se omite imagen');
+        const { image_url: _drop, ...rest } = tc.arguments;
+        tc.arguments = rest;
     }
 }
