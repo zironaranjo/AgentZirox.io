@@ -6,7 +6,8 @@ const USERINFO_URL = 'https://api.linkedin.com/v2/userinfo';
 const UGC_POSTS_URL = 'https://api.linkedin.com/v2/ugcPosts';
 const REGISTER_UPLOAD_URL = 'https://api.linkedin.com/v2/assets?action=registerUpload';
 const MAX_LINKEDIN_IMAGE_BYTES = 12 * 1024 * 1024;
-const LINKEDIN_TIMEOUT_MS = 20_000;
+const LINKEDIN_TIMEOUT_MS = 30_000;
+const LINKEDIN_UPLOAD_TIMEOUT_MS = 90_000;
 
 const META_PERSON_URN = 'linkedin_person_urn';
 
@@ -250,11 +251,14 @@ async function putBytesToLinkedInUpload(
         h.set('Content-Type', ct ?? 'application/octet-stream');
     }
 
-    const putRes = await fetchWithTimeout(uploadUrl, {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), LINKEDIN_UPLOAD_TIMEOUT_MS);
+    const putRes = await fetch(uploadUrl, {
         method: 'PUT',
         headers: h,
         body: new Uint8Array(bytes),
-    });
+        signal: controller.signal,
+    }).finally(() => clearTimeout(timer));
     if (!putRes.ok) {
         const t = await putRes.text();
         throw new Error(`LinkedIn PUT imagen ${putRes.status}: ${t.slice(0, 500)}`);
