@@ -57,14 +57,11 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
 
     let iterations = 0;
     const MAX_ITERATIONS = 8;
+    const MAX_HALLUCINATION_RETRIES = 3;
     const executedToolResults: string[] = [];
     const executedToolNames: string[] = [];
-    let hallucinationRetried = false;
+    let hallucinationRetries = 0;
 
-    // Unified loop: executes tools, detects and recovers from hallucinations, then continues.
-    // The old separate retry block was replaced here so that tools called in a retry response
-    // (e.g. generate_image) continue to the next iteration and can call more tools
-    // (e.g. linkedin_propose_post) rather than being cut off by an ignored finalRetry call.
     agentLoop: while (iterations < MAX_ITERATIONS) {
         if (response.toolCalls && response.toolCalls.length > 0) {
             iterations++;
@@ -85,28 +82,32 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
             }
 
             conversation.push(...toolResults);
-            // Reset per tool-batch so generate_image → linkedin_propose_post chain gets a retry.
+            // Reset per tool-batch so generate_image → linkedin_propose_post chain gets retries.
             // Exception: after linkedin_propose_post we must NOT reset — the loop should end there
             // to avoid the LLM auto-approving the post without user confirmation.
             const justProposed = executedToolNames.includes('linkedin_propose_post');
-            if (!justProposed) hallucinationRetried = false;
+            if (!justProposed) hallucinationRetries = 0;
             response = await callLLM(conversation, tools);
 
         } else {
-            // No tool calls — detect hallucination and retry once per tool-execution phase.
+            // No tool calls — detect hallucination and retry up to MAX_HALLUCINATION_RETRIES.
             const content = response.content ?? '';
-            if (!hallucinationRetried) {
+            if (hallucinationRetries < MAX_HALLUCINATION_RETRIES) {
                 const claimedToolUse =
                     toolNames.some((name) => content.includes(name)) ||
                     ACTION_PHRASES.some((phrase) => content.toLowerCase().includes(phrase));
 
                 if (claimedToolUse) {
-                    logger.warn('[agent] LLM described tool usage in text without calling it — retrying');
-                    hallucinationRetried = true;
+                    hallucinationRetries++;
+                    logger.warn(`[agent] LLM described tool usage in text without calling it — retry ${hallucinationRetries}/${MAX_HALLUCINATION_RETRIES}`);
+                    const pendingTools = toolNames.filter((n) => !executedToolNames.includes(n));
+                    const hint = pendingTools.length > 0
+                        ? ` Las herramientas disponibles que AÚN NO has llamado incluyen: ${pendingTools.slice(0, 6).join(', ')}.`
+                        : '';
                     conversation.push({ role: 'assistant', content });
                     conversation.push({
                         role: 'user',
-                        content: 'SISTEMA: Describiste en texto que usaste una herramienta pero no la llamaste realmente mediante tool_calls. Debes LLAMAR la herramienta usando el mecanismo estructurado. Inténtalo de nuevo ahora.',
+                        content: `SISTEMA: PROHIBIDO describir herramientas en texto. Describiste que usaste una herramienta pero NO la llamaste mediante tool_calls.${hint} DEBES llamarla AHORA usando el mecanismo estructurado de tool_calls. NO escribas más texto explicativo — llama la herramienta directamente.`,
                     });
                     response = await callLLM(conversation, tools);
                     continue agentLoop;
