@@ -16,11 +16,18 @@ export async function processMessage(chatId: string, userMessage: string): Promi
 }
 
 const ACTION_PHRASES = [
+    // LinkedIn
     '/li_approve', 'li_approve', 'encolado', 'cola de publicación', 'cola de publicacion',
-    'pendiente de aprobación', 'pendiente de aprobacion', 'schedule_task', 'programado',
-    'tarea programada', 'recordatorio programado',
+    'pendiente de aprobación', 'pendiente de aprobacion',
     'publicando el post', 'publicando en linkedin', 'publicando ahora', 'voy a publicar',
     'estoy publicando', 'he publicado', 'publicaré', 'ya está publicado',
+    // Email
+    'acabo de enviar', 'he enviado', 'correo enviado', 'email enviado',
+    'ya envié', 'ya mandé', 'acabo de mandar', 'envié el correo', 'mandé el correo',
+    'acabo de escribir', 'mensaje enviado',
+    // Acciones genéricas reclamadas sin tool call
+    'schedule_task', 'programado', 'tarea programada', 'recordatorio programado',
+    'acabo de buscar', 'acabo de leer', 'acabo de crear', 'acabo de guardar',
 ];
 
 // Tools whose results must be shown verbatim — LLM rewrite drops critical info (e.g. post ID)
