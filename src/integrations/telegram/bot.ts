@@ -183,6 +183,45 @@ export async function startTelegramBot() {
         await ctx.reply(`🛑 Propuesta #${id} rechazada. No se ha publicado nada en LinkedIn.`);
     });
 
+    // ── /wa — responder a un cliente de WhatsApp desde Telegram ─────────────
+    bot.command('wa', async (ctx) => {
+        const args = ctx.match?.toString().trim() ?? '';
+        const match = args.match(/^(\d{7,15})\s+([\s\S]+)$/);
+        if (!match) {
+            await ctx.reply(
+                'Uso: `/wa NUMERO mensaje`\nEjemplo: `/wa 34612345678 Hola, en qué te ayudo`',
+                { parse_mode: 'Markdown' }
+            );
+            return;
+        }
+        const [, to, message] = match;
+        const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
+        const accessToken = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
+        if (!phoneNumberId || !accessToken) {
+            await ctx.reply('❌ WhatsApp no configurado (WHATSAPP_PHONE_NUMBER_ID / WHATSAPP_ACCESS_TOKEN).');
+            return;
+        }
+        const res = await fetch(
+            `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+            {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messaging_product: 'whatsapp',
+                    to,
+                    type: 'text',
+                    text: { body: message },
+                }),
+            }
+        );
+        if (!res.ok) {
+            const err = await res.text();
+            await ctx.reply(`❌ Error enviando WhatsApp (${res.status}): ${err.slice(0, 300)}`);
+            return;
+        }
+        await ctx.reply(`✅ Enviado a +${to}: _"${message.slice(0, 100)}${message.length > 100 ? '…' : ''}"_`, { parse_mode: 'Markdown' });
+    });
+
     // ── Main message handler ──────────────────────────────────────────────────
     bot.on('message:text', async (ctx) => {
         const chatId = String(ctx.chat.id);

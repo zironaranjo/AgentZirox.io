@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initMemory } from '../../../../core/memory';
 import { processMessage } from '../../../../core/agent';
 import { logger } from '../../../../core/logger';
+import { sendTelegramChatMessage } from '../../../../integrations/telegram/send-message';
 
 const WA_API_VERSION = 'v19.0';
 
@@ -66,6 +67,7 @@ async function processIncoming(payload: WhatsAppWebhookPayload) {
                     await initMemory();
                     const reply = await processMessage(chatId, text);
                     await sendWhatsAppReply(from, reply, value.metadata.phone_number_id);
+                    await notifyTelegramOwner(from, text, reply);
                 } catch (err) {
                     const errMsg = err instanceof Error ? err.message : String(err);
                     logger.error(`[whatsapp] Error procesando mensaje de ${from}:`, errMsg);
@@ -112,6 +114,24 @@ async function sendWhatsAppReply(to: string, text: string, phoneNumberId: string
             logger.error(`[whatsapp] Error enviando respuesta (${res.status}): ${raw.slice(0, 300)}`);
         }
     }
+}
+
+async function notifyTelegramOwner(from: string, userMsg: string, agentReply: string) {
+    const ownerChatId = process.env.TELEGRAM_OWNER_CHAT_ID?.trim();
+    if (!ownerChatId) return;
+    const preview = (s: string, n: number) => s.length > n ? s.slice(0, n) + '…' : s;
+    const text = [
+        `📱 *WhatsApp* de +${from}:`,
+        `_"${preview(userMsg, 300)}"_`,
+        ``,
+        `🤖 *Agente respondió:*`,
+        `_"${preview(agentReply, 300)}"_`,
+        ``,
+        `↩️ Para responder: \`/wa ${from} tu mensaje\``,
+    ].join('\n');
+    await sendTelegramChatMessage(ownerChatId, text, 'Markdown').catch((e) =>
+        logger.warn('[whatsapp] No se pudo notificar a Telegram:', e)
+    );
 }
 
 function splitMessage(text: string, maxLen: number): string[] {
