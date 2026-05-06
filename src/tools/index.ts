@@ -23,3 +23,8 @@ import './drive-archive-important-emails';
 import './google-sheets-calendar';
 import './linkedin';
 import './generate-image';
+import './fetch-url';
+import './get-price';
+import './tts-generate';
+import './youtube-transcript';
+import './send-whatsapp';
