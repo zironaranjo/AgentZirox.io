@@ -17,7 +17,7 @@ function parseRunAtMs(runAtIso: string): number {
 registerTool({
     name: 'schedule_task',
     description:
-        'Programa una acción futura en ESTE chat (Telegram). OBLIGATORIO si el usuario pide un recordatorio, aviso o tarea a una hora/fecha concreta (mañana a las 8, en 30 minutos, etc.). Sin llamar a esta tool, nada se ejecutará solo: no basta con prometerlo en texto. Calcula run_at_iso en Europa/Madrid con offset correcto (+01:00 o +02:00 según DST).',
+        'Programa una acción futura en ESTE chat (Telegram o WhatsApp). OBLIGATORIO si el usuario pide un recordatorio, aviso o tarea a una hora/fecha concreta (mañana a las 8, en 30 minutos, etc.). Sin llamar a esta tool, nada se ejecutará solo: no basta con prometerlo en texto. Calcula run_at_iso en Europa/Madrid con offset correcto (+01:00 o +02:00 según DST).',
     parameters: {
         type: 'object',
         properties: {
@@ -37,7 +37,7 @@ registerTool({
     handler: async (args) => {
         const ctx = getToolContext();
         if (!ctx?.chatId) {
-            throw new Error('schedule_task solo está disponible desde Telegram (sin chat_id)');
+            throw new Error('schedule_task requiere un chat_id (Telegram o WhatsApp)');
         }
         const instruction = String((args as { instruction?: string }).instruction ?? '').trim();
         const runAtIso = String((args as { run_at_iso?: string }).run_at_iso ?? '').trim();
@@ -67,7 +67,7 @@ registerTool({
     parameters: { type: 'object', properties: {}, required: [] },
     handler: async () => {
         const ctx = getToolContext();
-        if (!ctx?.chatId) throw new Error('list_scheduled_tasks solo desde Telegram');
+        if (!ctx?.chatId) throw new Error('list_scheduled_tasks requiere chat_id (Telegram o WhatsApp)');
         const rows = await listPendingScheduledForChat(ctx.chatId);
         if (rows.length === 0) return 'No hay tareas pendientes en este chat.';
         const lines = rows.map((r) => {
@@ -90,7 +90,7 @@ registerTool({
     },
     handler: async (args) => {
         const ctx = getToolContext();
-        if (!ctx?.chatId) throw new Error('cancel_scheduled_task solo desde Telegram');
+        if (!ctx?.chatId) throw new Error('cancel_scheduled_task requiere chat_id (Telegram o WhatsApp)');
         const id = Number((args as { task_id?: string }).task_id);
         if (!Number.isFinite(id)) throw new Error('task_id inválido');
         const ok = await cancelScheduledTaskForChat(ctx.chatId, id);

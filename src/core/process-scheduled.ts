@@ -8,6 +8,55 @@ import {
 import { sendTelegramChatMessage } from '../integrations/telegram/send-message';
 import { logger } from './logger';
 
+const WA_API_VERSION = 'v19.0';
+
+async function deliverScheduledReply(chatId: string, text: string): Promise<void> {
+    if (chatId.startsWith('wa_')) {
+        const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
+        const accessToken = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
+        if (!phoneNumberId || !accessToken) {
+            logger.error('[scheduled] WHATSAPP_PHONE_NUMBER_ID / WHATSAPP_ACCESS_TOKEN no configurados — no se puede entregar el recordatorio');
+            return;
+        }
+        const to = chatId.startsWith('wa_group_')
+            ? chatId.replace('wa_group_', '')
+            : chatId.replace('wa_', '');
+        const chunks = splitIntoChunks(text, 4000);
+        for (const chunk of chunks) {
+            const res = await fetch(
+                `https://graph.facebook.com/${WA_API_VERSION}/${phoneNumberId}/messages`,
+                {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        messaging_product: 'whatsapp',
+                        to,
+                        type: 'text',
+                        text: { body: chunk },
+                    }),
+                }
+            );
+            if (!res.ok) {
+                const raw = await res.text();
+                logger.error(`[scheduled] WhatsApp delivery error (${res.status}): ${raw.slice(0, 300)}`);
+            }
+        }
+    } else {
+        await sendTelegramChatMessage(chatId, text);
+    }
+}
+
+function splitIntoChunks(text: string, maxLen: number): string[] {
+    if (text.length <= maxLen) return [text];
+    const chunks: string[] = [];
+    let i = 0;
+    while (i < text.length) { chunks.push(text.slice(i, i + maxLen)); i += maxLen; }
+    return chunks;
+}
+
 function scheduledTasksEnabled(): boolean {
     const v = (process.env.SCHEDULED_TASKS_ENABLED ?? '').toLowerCase();
     return v === 'true' || v === '1' || v === 'yes';
@@ -48,7 +97,7 @@ export async function tickScheduledTasksInternal(): Promise<{ processed: number;
                     `⏰ **Tarea programada**\n\n${task.instruction}\n\n` +
                     `Cumple lo anterior ahora (búsqueda web, resumen, etc.). Sé concreto.`;
                 const reply = await processMessage(task.chat_id, prompt);
-                await sendTelegramChatMessage(task.chat_id, `🔔 *Recordatorio*\n\n${reply}`);
+                await deliverScheduledReply(task.chat_id, `🔔 *Recordatorio*\n\n${reply}`);
                 await markScheduledTaskDone(task.id);
                 processed++;
                 logger.info(`[scheduled] completed task ${task.id} for chat ${task.chat_id}`);
