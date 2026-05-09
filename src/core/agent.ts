@@ -26,7 +26,6 @@ const ACTION_PHRASES = [
     'ya envié', 'ya mandé', 'acabo de mandar', 'envié el correo', 'mandé el correo',
     'acabo de escribir', 'mensaje enviado',
     // Acciones genéricas reclamadas sin tool call
-    'schedule_task', 'programado', 'tarea programada', 'recordatorio programado',
     'acabo de buscar', 'acabo de leer', 'acabo de crear', 'acabo de guardar',
 ];
 
@@ -100,14 +99,14 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
             // No tool calls — detect hallucination and retry up to MAX_HALLUCINATION_RETRIES.
             const content = response.content ?? '';
             if (hallucinationRetries < MAX_HALLUCINATION_RETRIES) {
+                const pendingTools = toolNames.filter((n) => !executedToolNames.includes(n));
                 const claimedToolUse =
-                    toolNames.some((name) => content.includes(name)) ||
+                    pendingTools.some((name) => content.includes(name)) ||
                     ACTION_PHRASES.some((phrase) => content.toLowerCase().includes(phrase));
 
                 if (claimedToolUse) {
                     hallucinationRetries++;
                     logger.warn(`[agent] LLM described tool usage in text without calling it — retry ${hallucinationRetries}/${MAX_HALLUCINATION_RETRIES}`);
-                    const pendingTools = toolNames.filter((n) => !executedToolNames.includes(n));
                     const hint = pendingTools.length > 0
                         ? ` Las herramientas disponibles que AÚN NO has llamado incluyen: ${pendingTools.slice(0, 6).join(', ')}.`
                         : '';
