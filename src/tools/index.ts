@@ -28,4 +28,5 @@ import './get-price';
 import './tts-generate';
 import './youtube-transcript';
 import './send-whatsapp';
+import './send-whatsapp-voice';
 import './knowledge';
