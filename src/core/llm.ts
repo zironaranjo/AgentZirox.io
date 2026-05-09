@@ -114,10 +114,21 @@ export async function buildSystemPrompt(): Promise<string> {
         }
     }
 
-    const channel = ctx?.chatId ? 'Telegram' : 'web';
+    const chatId = ctx?.chatId ?? '';
+    const isWaGroup = chatId.startsWith('wa_group_');
+    const isWa = chatId.startsWith('wa_') && !isWaGroup;
+    const channel = isWaGroup ? 'WhatsApp Grupo' : isWa ? 'WhatsApp' : chatId ? 'Telegram' : 'web';
+
+    const channelContext = isWaGroup
+        ? `Estás dentro de un grupo de WhatsApp (chat ID: ${chatId}). El historial incluye mensajes de todos los miembros en formato [Nombre]: mensaje. Cuando alguien te mencione con @Zirox, respondes al grupo. Si te preguntan por tareas pendientes, asignaciones o responsabilidades, revisa el historial del chat — ahí están todos los mensajes aunque no te hayan mencionado. Si detectas tareas importantes (quién hace qué, fechas, responsables), usa add_knowledge para guardarlas de forma estructurada con tag "grupo".`
+        : isWa
+        ? `Estás en WhatsApp. Chat ID: ${chatId}.`
+        : chatId
+        ? `Chat ID: ${chatId}. Estás hablando DIRECTAMENTE en Telegram — NUNCA digas "revisa Telegram" ni "te llegará un mensaje a Telegram" porque el usuario YA ESTÁ aquí.`
+        : 'Estás en la interfaz web. La web tiene entrada de voz por micrófono del navegador (Web Speech API): el usuario puede hablar y la transcripción llega como texto. SI el usuario pregunta si puedes escucharle por el micro de su ordenador/web, dile que SÍ — el orbe reconoce su voz directamente en el navegador y te envía la transcripción.';
 
     return `Eres AgenteZirox, un agente de IA personal altamente capaz.
-Canal actual: ${channel}. ${ctx?.chatId ? `Chat ID: ${ctx.chatId}. Estás hablando DIRECTAMENTE en Telegram — NUNCA digas "revisa Telegram" ni "te llegará un mensaje a Telegram" porque el usuario YA ESTÁ aquí.` : 'Estás en la interfaz web. La web tiene entrada de voz por micrófono del navegador (Web Speech API): el usuario puede hablar y la transcripción llega como texto. SI el usuario pregunta si puedes escucharle por el micro de su ordenador/web, dile que SÍ — el orbe reconoce su voz directamente en el navegador y te envía la transcripción.'}
+Canal actual: ${channel}. ${channelContext}
 Tienes acceso a herramientas para enviar emails, llamar APIs externas, buscar en tu memoria, buscar en internet (web_search) y más.
 Cuando el usuario pida investigar, buscar en la web, datos actuales, correos o telefonos de empresas, o "que dice internet", usa la tool web_search con una consulta clara.
 Si pide crear, generar o dibujar una imagen, ilustracion, banner o logo visual (aunque lo diga en plan simple: "haz una foto de...", "una imagen de un cohete"), usa generate_image con un prompt descriptivo. El usuario no tiene que nombrar la herramienta. Backend: KIE_API_KEY (Kie.ai) o OPENAI_API_KEY; opcional IMAGE_GENERATION_PROVIDER=kie|openai para forzar.

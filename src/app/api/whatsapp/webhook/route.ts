@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initMemory } from '../../../../core/memory';
+import { initMemory, saveMessage } from '../../../../core/memory';
 import { processMessage } from '../../../../core/agent';
 import { logger } from '../../../../core/logger';
 import { sendTelegramChatMessage } from '../../../../integrations/telegram/send-message';
@@ -64,12 +64,28 @@ async function processIncoming(payload: WhatsAppWebhookPayload) {
                 // Detectar si es mensaje de grupo
                 const groupId = msg.group_id ?? msg.context?.group_id;
                 const isGroup = Boolean(groupId);
+                const chatId = isGroup ? `wa_group_${groupId}` : `wa_${from}`;
+                const replyTo = isGroup ? groupId! : from;
 
-                // En grupos: solo responder si contiene trigger word
+                // En grupos: escucha pasiva — guardar todos los mensajes en el historial
                 if (isGroup) {
+                    const senderName =
+                        value.contacts?.find((c) => c.wa_id === from)?.profile?.name ?? `+${from}`;
                     const lower = rawText.toLowerCase();
                     const triggered = GROUP_TRIGGERS.some((t) => lower.includes(t));
-                    if (!triggered) continue; // ignorar mensaje sin trigger
+
+                    if (!triggered) {
+                        // Guardar en historial sin responder (contexto para futuras consultas)
+                        try {
+                            await initMemory();
+                            await saveMessage(chatId, 'user', `[${senderName}]: ${rawText}`);
+                        } catch (e) {
+                            logger.warn('[whatsapp] No se pudo guardar mensaje pasivo de grupo:', e);
+                        }
+                        continue;
+                    }
+                    // Si hay trigger, el prefijo del remitente se añade al texto para contexto
+                    logger.info(`[whatsapp] Grupo ${groupId} — trigger de ${senderName}: "${rawText.slice(0, 80)}"`);
                 }
 
                 // Limpiar trigger word del texto antes de procesar
@@ -78,10 +94,6 @@ async function processIncoming(payload: WhatsAppWebhookPayload) {
                     text = text.replace(new RegExp(trigger, 'gi'), '').trim();
                 }
                 if (!text) continue;
-
-                // Chat ID separado para grupos vs individuales
-                const replyTo = isGroup ? groupId! : from;
-                const chatId = isGroup ? `wa_group_${groupId}` : `wa_${from}`;
 
                 logger.info(`[whatsapp] ${isGroup ? `Grupo ${groupId}` : `+${from}`}: "${text.slice(0, 80)}"`);
 
