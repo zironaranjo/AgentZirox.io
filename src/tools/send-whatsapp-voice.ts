@@ -54,9 +54,9 @@ registerTool({
         // 1. Generar TTS → MP3
         const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts');
         const tts = new MsEdgeTTS();
-        await tts.setMetadata(voice, OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS);
+        await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
 
-        const audioPath = join(tmpdir(), `wa_voice_${Date.now()}.webm`);
+        const audioPath = join(tmpdir(), `wa_voice_${Date.now()}.mp3`);
         await new Promise<void>((resolve, reject) => {
             const { audioStream } = tts.toStream(text);
             const chunks: Buffer[] = [];
@@ -74,8 +74,8 @@ registerTool({
         const audioBuffer = await fs.readFile(audioPath);
         const formData = new FormData();
         formData.append('messaging_product', 'whatsapp');
-        formData.append('type', 'audio/webm');
-        formData.append('file', new Blob([audioBuffer], { type: 'audio/webm' }), 'voice.webm');
+        formData.append('type', 'audio/mpeg');
+        formData.append('file', new Blob([audioBuffer], { type: 'audio/mpeg' }), 'voice.mp3');
 
         const uploadRes = await fetch(
             `https://graph.facebook.com/${WA_API_VERSION}/${phoneNumberId}/media`,
