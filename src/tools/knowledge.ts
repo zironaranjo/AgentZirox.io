@@ -12,9 +12,8 @@ registerTool({
             title: { type: 'string', description: 'Título corto del documento (ej: "Precios servicios 2026")' },
             content: { type: 'string', description: 'Contenido completo del documento' },
             tags: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Etiquetas opcionales para categorizar (ej: ["precios", "servicios"])',
+                type: 'string',
+                description: 'Etiquetas opcionales separadas por comas (ej: "precios, servicios")',
             },
         },
         required: ['title', 'content'],
@@ -23,7 +22,8 @@ registerTool({
         const a = args as { title?: string; content?: string; tags?: string[] };
         const title = String(a.title ?? '').trim();
         const content = String(a.content ?? '').trim();
-        const tags = Array.isArray(a.tags) ? a.tags.map(String) : [];
+        const tagsRaw = String(a.tags ?? '').trim();
+        const tags = tagsRaw ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean) : [];
         if (!title) throw new Error('title es obligatorio');
         if (!content) throw new Error('content es obligatorio');
 
