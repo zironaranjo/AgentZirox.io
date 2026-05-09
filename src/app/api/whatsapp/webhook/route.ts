@@ -3,6 +3,7 @@ import { initMemory, saveMessage } from '../../../../core/memory';
 import { processMessage } from '../../../../core/agent';
 import { logger } from '../../../../core/logger';
 import { sendTelegramChatMessage } from '../../../../integrations/telegram/send-message';
+import { analyzeImageBase64, visionAvailable } from '../../../../core/vision';
 
 const WA_API_VERSION = 'v19.0';
 
@@ -55,40 +56,93 @@ async function processIncoming(payload: WhatsAppWebhookPayload) {
 
             const value = change.value;
             for (const msg of value.messages ?? []) {
-                if (msg.type !== 'text') continue;
+                const { type, from } = msg;
+                if (!from) continue;
+                if (!['text', 'image', 'video'].includes(type)) continue;
 
-                const from = msg.from;
-                const rawText = msg.text?.body?.trim();
-                if (!from || !rawText) continue;
-
-                // Detectar si es mensaje de grupo
                 const groupId = msg.group_id ?? msg.context?.group_id;
                 const isGroup = Boolean(groupId);
                 const chatId = isGroup ? `wa_group_${groupId}` : `wa_${from}`;
                 const replyTo = isGroup ? groupId! : from;
+                const senderName =
+                    value.contacts?.find((c) => c.wa_id === from)?.profile?.name ?? `+${from}`;
 
-                // En grupos: escucha pasiva — guardar todos los mensajes en el historial
+                await initMemory();
+
+                // ── Vídeo: guardar en historial (sin analizar) ────────────────
+                if (type === 'video') {
+                    if (isGroup) {
+                        const caption = msg.video?.caption ? ` — "${msg.video.caption}"` : '';
+                        await saveMessage(chatId, 'user', `[${senderName}]: subió un vídeo${caption}`).catch(() => {});
+                    }
+                    continue;
+                }
+
+                // ── Imagen: descargar y analizar ──────────────────────────────
+                if (type === 'image') {
+                    const mediaId = msg.image?.id;
+                    const caption = msg.image?.caption?.trim() ?? '';
+                    if (!mediaId) continue;
+
+                    let visionResult = '';
+                    if (visionAvailable()) {
+                        try {
+                            const { base64, mimeType } = await downloadWhatsAppMedia(mediaId);
+                            visionResult = await analyzeImageBase64(base64, mimeType, caption);
+                        } catch (e) {
+                            logger.warn('[whatsapp] Error analizando imagen:', e);
+                            visionResult = '(no se pudo analizar la imagen)';
+                        }
+                    }
+
+                    const historyLine = `[${senderName}]: [FOTO]${caption ? ` "${caption}"` : ''}${visionResult ? ` | 🔍 ${visionResult}` : ''}`;
+
+                    // En grupos: guardar siempre en historial
+                    if (isGroup) {
+                        const lower = (caption + ' ' + visionResult).toLowerCase();
+                        const triggered = GROUP_TRIGGERS.some((t) => lower.includes(t)) ||
+                            GROUP_TRIGGERS.some((t) => (msg.image?.caption ?? '').toLowerCase().includes(t));
+
+                        if (!triggered) {
+                            await saveMessage(chatId, 'user', historyLine).catch(() => {});
+                            logger.info(`[whatsapp] Grupo ${groupId} — imagen pasiva de ${senderName}: ${caption || '(sin caption)'}`);
+                            continue;
+                        }
+                    }
+
+                    // Responder (grupo con trigger o chat individual)
+                    const textForAgent = visionResult
+                        ? `[IMAGEN RECIBIDA]\n${caption ? `El usuario dice: "${caption}"\n` : ''}Descripción automática: ${visionResult}`
+                        : caption || '[IMAGEN sin descripción]';
+
+                    logger.info(`[whatsapp] ${isGroup ? `Grupo ${groupId}` : `+${from}`} imagen: "${caption.slice(0, 60)}"`);
+                    try {
+                        const reply = await processMessage(chatId, textForAgent);
+                        await sendWhatsAppReply(replyTo, reply, value.metadata.phone_number_id);
+                        await notifyTelegramOwner(from, `📷 ${caption || '(imagen)'}`, reply, isGroup ? groupId : undefined);
+                    } catch (err) {
+                        const errMsg = err instanceof Error ? err.message : String(err);
+                        logger.error(`[whatsapp] Error procesando imagen de ${from}:`, errMsg);
+                        await sendWhatsAppReply(replyTo, `❌ Error: ${errMsg.slice(0, 200)}`, value.metadata.phone_number_id).catch(() => {});
+                    }
+                    continue;
+                }
+
+                // ── Texto ─────────────────────────────────────────────────────
+                const rawText = msg.text?.body?.trim();
+                if (!rawText) continue;
+
                 if (isGroup) {
-                    const senderName =
-                        value.contacts?.find((c) => c.wa_id === from)?.profile?.name ?? `+${from}`;
                     const lower = rawText.toLowerCase();
                     const triggered = GROUP_TRIGGERS.some((t) => lower.includes(t));
 
                     if (!triggered) {
-                        // Guardar en historial sin responder (contexto para futuras consultas)
-                        try {
-                            await initMemory();
-                            await saveMessage(chatId, 'user', `[${senderName}]: ${rawText}`);
-                        } catch (e) {
-                            logger.warn('[whatsapp] No se pudo guardar mensaje pasivo de grupo:', e);
-                        }
+                        await saveMessage(chatId, 'user', `[${senderName}]: ${rawText}`).catch(() => {});
                         continue;
                     }
-                    // Si hay trigger, el prefijo del remitente se añade al texto para contexto
                     logger.info(`[whatsapp] Grupo ${groupId} — trigger de ${senderName}: "${rawText.slice(0, 80)}"`);
                 }
 
-                // Limpiar trigger word del texto antes de procesar
                 let text = rawText;
                 for (const trigger of GROUP_TRIGGERS) {
                     text = text.replace(new RegExp(trigger, 'gi'), '').trim();
@@ -96,24 +150,34 @@ async function processIncoming(payload: WhatsAppWebhookPayload) {
                 if (!text) continue;
 
                 logger.info(`[whatsapp] ${isGroup ? `Grupo ${groupId}` : `+${from}`}: "${text.slice(0, 80)}"`);
-
                 try {
-                    await initMemory();
                     const reply = await processMessage(chatId, text);
                     await sendWhatsAppReply(replyTo, reply, value.metadata.phone_number_id);
                     await notifyTelegramOwner(from, rawText, reply, isGroup ? groupId : undefined);
                 } catch (err) {
                     const errMsg = err instanceof Error ? err.message : String(err);
                     logger.error(`[whatsapp] Error procesando mensaje de ${from}:`, errMsg);
-                    await sendWhatsAppReply(
-                        replyTo,
-                        `❌ Error: ${errMsg.slice(0, 200)}`,
-                        value.metadata.phone_number_id
-                    ).catch(() => {});
+                    await sendWhatsAppReply(replyTo, `❌ Error: ${errMsg.slice(0, 200)}`, value.metadata.phone_number_id).catch(() => {});
                 }
             }
         }
     }
+}
+
+async function downloadWhatsAppMedia(mediaId: string): Promise<{ base64: string; mimeType: string }> {
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
+    if (!accessToken) throw new Error('WHATSAPP_ACCESS_TOKEN no configurado');
+
+    const metaRes = await fetch(`https://graph.facebook.com/${WA_API_VERSION}/${mediaId}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!metaRes.ok) throw new Error(`Meta media metadata error (${metaRes.status})`);
+    const { url, mime_type } = (await metaRes.json()) as { url: string; mime_type: string };
+
+    const imgRes = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!imgRes.ok) throw new Error(`Meta media download error (${imgRes.status})`);
+    const base64 = Buffer.from(await imgRes.arrayBuffer()).toString('base64');
+    return { base64, mimeType: mime_type };
 }
 
 async function sendWhatsAppReply(to: string, text: string, phoneNumberId: string) {
@@ -201,6 +265,8 @@ interface WhatsAppWebhookPayload {
                     timestamp: string;
                     type: string;
                     text?: { body: string };
+                    image?: { id: string; mime_type: string; caption?: string };
+                    video?: { id: string; mime_type: string; caption?: string };
                     group_id?: string;
                     context?: { group_id?: string; from?: string; id?: string };
                 }>;
