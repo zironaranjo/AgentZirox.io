@@ -13,7 +13,8 @@ RUN apt-get update && apt-get install -y \
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# código fuente
+# código fuente — ARG aquí invalida el cache a partir de COPY
+ARG CACHEBUST=1
 COPY . .
 
 # Paso 1: compilar Next.js (genera .next/)
