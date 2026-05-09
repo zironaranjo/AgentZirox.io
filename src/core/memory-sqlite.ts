@@ -48,6 +48,15 @@ export async function initSqliteMemory(): Promise<void> {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_li_pending_chat ON linkedin_pending_posts(chat_id, status);
+
+    CREATE TABLE IF NOT EXISTS knowledge (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      tags TEXT NOT NULL DEFAULT '[]',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
     try {
         db.exec(`ALTER TABLE linkedin_pending_posts ADD COLUMN image_url TEXT`);
@@ -250,4 +259,53 @@ export function sqliteDbReady(): boolean {
     } catch {
         return false;
     }
+}
+
+// ── Knowledge base ────────────────────────────────────────────────────────────
+
+export type KnowledgeRow = {
+    id: number;
+    title: string;
+    content: string;
+    tags: string[];
+    created_at: string;
+};
+
+type KnowledgeRaw = { id: number; title: string; content: string; tags: string; created_at: string };
+
+function parseKnowledgeRow(r: KnowledgeRaw): KnowledgeRow {
+    let tags: string[] = [];
+    try { tags = JSON.parse(r.tags); } catch { /* ignore */ }
+    return { id: r.id, title: r.title, content: r.content, tags, created_at: r.created_at };
+}
+
+export function sqliteAddKnowledge(title: string, content: string, tags: string[]): number {
+    const r = sqliteGetDb()
+        .prepare(`INSERT INTO knowledge (title, content, tags) VALUES (?, ?, ?)`)
+        .run(title, content, JSON.stringify(tags));
+    return Number(r.lastInsertRowid);
+}
+
+export function sqliteSearchKnowledge(query: string, limit = 5): KnowledgeRow[] {
+    const like = `%${query.toLowerCase()}%`;
+    const rows = sqliteGetDb()
+        .prepare(
+            `SELECT id, title, content, tags, created_at FROM knowledge
+             WHERE lower(title) LIKE ? OR lower(content) LIKE ?
+             ORDER BY updated_at DESC LIMIT ?`
+        )
+        .all(like, like, limit) as KnowledgeRaw[];
+    return rows.map(parseKnowledgeRow);
+}
+
+export function sqliteListKnowledge(): KnowledgeRow[] {
+    const rows = sqliteGetDb()
+        .prepare(`SELECT id, title, content, tags, created_at FROM knowledge ORDER BY updated_at DESC`)
+        .all() as KnowledgeRaw[];
+    return rows.map(parseKnowledgeRow);
+}
+
+export function sqliteDeleteKnowledge(id: number): boolean {
+    const r = sqliteGetDb().prepare(`DELETE FROM knowledge WHERE id = ?`).run(id);
+    return r.changes === 1;
 }

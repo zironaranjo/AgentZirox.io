@@ -1,22 +1,26 @@
 import { logger } from './logger';
 import {
     initSqliteMemory,
+    sqliteAddKnowledge,
     sqliteCancelScheduledTaskForChat,
     sqliteClaimNextDueScheduledTask,
     sqliteClearHistory,
     sqliteDbReady,
+    sqliteDeleteKnowledge,
     sqliteGetHistory,
     sqliteGetLinkedInPendingPostForChat,
     sqliteGetMeta,
     sqliteGetRecentMessagesAllChats,
     sqliteInsertLinkedInPendingPost,
     sqliteInsertScheduledTask,
+    sqliteListKnowledge,
     sqliteListLinkedInPendingPostsForChat,
     sqliteListPendingScheduledForChat,
     sqliteMarkScheduledTaskDone,
     sqliteMarkScheduledTaskFailed,
     sqliteReleaseStuckRunningTasks,
     sqliteSaveMessage,
+    sqliteSearchKnowledge,
     sqliteSetLinkedInPendingFailed,
     sqliteSetLinkedInPendingPublished,
     sqliteSetLinkedInPendingRejected,
@@ -24,30 +28,34 @@ import {
 } from './memory-sqlite';
 import {
     initSupabaseMemory,
+    supabaseAddKnowledge,
     supabaseCancelScheduledTaskForChat,
     supabaseClaimNextDueScheduledTask,
     supabaseClearHistory,
+    supabaseDeleteKnowledge,
     supabaseGetHistory,
     supabaseGetLinkedInPendingPostForChat,
     supabaseGetMeta,
     supabaseGetRecentMessagesAllChats,
     supabaseInsertLinkedInPendingPost,
     supabaseInsertScheduledTask,
+    supabaseListKnowledge,
     supabaseListLinkedInPendingPostsForChat,
     supabaseListPendingScheduledForChat,
     supabaseMarkScheduledTaskDone,
     supabaseMarkScheduledTaskFailed,
     supabaseReleaseStuckRunningTasks,
     supabaseSaveMessage,
+    supabaseSearchKnowledge,
     supabaseSetLinkedInPendingFailed,
     supabaseSetLinkedInPendingPublished,
     supabaseSetLinkedInPendingRejected,
     supabaseSetMeta,
 } from './memory-supabase';
 
-import type { LinkedInPendingRow, ScheduledTaskRow } from './memory-sqlite';
+import type { KnowledgeRow, LinkedInPendingRow, ScheduledTaskRow } from './memory-sqlite';
 
-export type { LinkedInPendingRow, ScheduledTaskRow } from './memory-sqlite';
+export type { KnowledgeRow, LinkedInPendingRow, ScheduledTaskRow } from './memory-sqlite';
 
 type Backend = 'sqlite' | 'supabase';
 
@@ -280,4 +288,35 @@ export async function setLinkedInPendingFailed(id: number, error: string): Promi
 export async function setLinkedInPendingRejected(id: number): Promise<void> {
     if (b() === 'supabase') return supabaseSetLinkedInPendingRejected(id);
     sqliteSetLinkedInPendingRejected(id);
+}
+
+// ── Knowledge base ────────────────────────────────────────────────────────────
+
+export async function addKnowledge(
+    title: string,
+    content: string,
+    tags: string[],
+    embedding: number[] | null
+): Promise<number> {
+    if (b() === 'supabase') return supabaseAddKnowledge(title, content, tags, embedding);
+    return sqliteAddKnowledge(title, content, tags);
+}
+
+export async function searchKnowledge(
+    embedding: number[] | null,
+    query: string,
+    limit = 5
+): Promise<KnowledgeRow[]> {
+    if (b() === 'supabase') return supabaseSearchKnowledge(embedding, query, limit);
+    return sqliteSearchKnowledge(query, limit);
+}
+
+export async function listKnowledge(): Promise<KnowledgeRow[]> {
+    if (b() === 'supabase') return supabaseListKnowledge();
+    return sqliteListKnowledge();
+}
+
+export async function deleteKnowledge(id: number): Promise<boolean> {
+    if (b() === 'supabase') return supabaseDeleteKnowledge(id);
+    return sqliteDeleteKnowledge(id);
 }

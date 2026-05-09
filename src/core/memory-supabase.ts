@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { LinkedInPendingRow, ScheduledTaskRow } from './memory-sqlite';
+import type { LinkedInPendingRow, KnowledgeRow, ScheduledTaskRow } from './memory-sqlite';
 
 let client: SupabaseClient | undefined;
 
@@ -283,4 +283,69 @@ export async function supabaseSetLinkedInPendingRejected(id: number): Promise<vo
         })
         .eq('id', id);
     if (error) throw new Error(`Supabase setLinkedInPendingRejected: ${error.message}`);
+}
+
+// ── Knowledge base ────────────────────────────────────────────────────────────
+
+export async function supabaseAddKnowledge(
+    title: string,
+    content: string,
+    tags: string[],
+    embedding: number[] | null
+): Promise<number> {
+    const payload: Record<string, unknown> = {
+        title,
+        content,
+        tags,
+        updated_at: new Date().toISOString(),
+    };
+    if (embedding) payload.embedding = embedding;
+    const { data, error } = await getClient()
+        .from('knowledge')
+        .insert(payload)
+        .select('id')
+        .single();
+    if (error) throw new Error(`Supabase addKnowledge: ${error.message}`);
+    return num((data as { id: unknown }).id);
+}
+
+export async function supabaseSearchKnowledge(
+    embedding: number[] | null,
+    query: string,
+    limit = 5
+): Promise<KnowledgeRow[]> {
+    if (embedding) {
+        const { data, error } = await getClient().rpc('search_knowledge_semantic', {
+            p_embedding: embedding,
+            p_limit: limit,
+        });
+        if (error) throw new Error(`Supabase searchKnowledge (semantic): ${error.message}`);
+        return (data ?? []) as KnowledgeRow[];
+    }
+    const { data, error } = await getClient()
+        .from('knowledge')
+        .select('id, title, content, tags, created_at')
+        .textSearch('content', query, { type: 'websearch', config: 'spanish' })
+        .limit(limit);
+    if (error) throw new Error(`Supabase searchKnowledge (fts): ${error.message}`);
+    return (data ?? []) as KnowledgeRow[];
+}
+
+export async function supabaseListKnowledge(): Promise<KnowledgeRow[]> {
+    const { data, error } = await getClient()
+        .from('knowledge')
+        .select('id, title, content, tags, created_at')
+        .order('updated_at', { ascending: false });
+    if (error) throw new Error(`Supabase listKnowledge: ${error.message}`);
+    return (data ?? []) as KnowledgeRow[];
+}
+
+export async function supabaseDeleteKnowledge(id: number): Promise<boolean> {
+    const { data, error } = await getClient()
+        .from('knowledge')
+        .delete()
+        .eq('id', id)
+        .select('id');
+    if (error) throw new Error(`Supabase deleteKnowledge: ${error.message}`);
+    return (data?.length ?? 0) === 1;
 }

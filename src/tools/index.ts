@@ -28,3 +28,4 @@ import './get-price';
 import './tts-generate';
 import './youtube-transcript';
 import './send-whatsapp';
+import './knowledge';
