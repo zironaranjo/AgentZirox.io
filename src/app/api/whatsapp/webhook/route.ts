@@ -6,8 +6,10 @@ import { sendTelegramChatMessage } from '../../../../integrations/telegram/send-
 
 const WA_API_VERSION = 'v19.0';
 
+// Palabra(s) que activan el agente en grupos. Insensible a mayúsculas.
+const GROUP_TRIGGERS = ['@zirox', '@agente', '@bot'];
+
 // ── Verificación del webhook (GET) ────────────────────────────────────────────
-// Meta llama a este endpoint una vez para confirmar que el webhook es tuyo.
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const mode = searchParams.get('hub.mode');
@@ -37,7 +39,6 @@ export async function POST(req: NextRequest) {
         return new NextResponse('Bad Request', { status: 400 });
     }
 
-    // Meta espera siempre un 200 rápido, procesamos en background
     processIncoming(body).catch((err) =>
         logger.error('[whatsapp] Error procesando mensaje entrante:', err)
     );
@@ -54,26 +55,47 @@ async function processIncoming(payload: WhatsAppWebhookPayload) {
 
             const value = change.value;
             for (const msg of value.messages ?? []) {
-                if (msg.type !== 'text') continue; // solo texto por ahora
+                if (msg.type !== 'text') continue;
 
-                const from = msg.from; // número del usuario, ej: "34612345678"
-                const text = msg.text?.body?.trim();
-                if (!from || !text) continue;
+                const from = msg.from;
+                const rawText = msg.text?.body?.trim();
+                if (!from || !rawText) continue;
 
-                const chatId = `wa_${from}`;
-                logger.info(`[whatsapp] Mensaje de +${from}: "${text.slice(0, 80)}"`);
+                // Detectar si es mensaje de grupo
+                const groupId = msg.group_id ?? msg.context?.group_id;
+                const isGroup = Boolean(groupId);
+
+                // En grupos: solo responder si contiene trigger word
+                if (isGroup) {
+                    const lower = rawText.toLowerCase();
+                    const triggered = GROUP_TRIGGERS.some((t) => lower.includes(t));
+                    if (!triggered) continue; // ignorar mensaje sin trigger
+                }
+
+                // Limpiar trigger word del texto antes de procesar
+                let text = rawText;
+                for (const trigger of GROUP_TRIGGERS) {
+                    text = text.replace(new RegExp(trigger, 'gi'), '').trim();
+                }
+                if (!text) continue;
+
+                // Chat ID separado para grupos vs individuales
+                const replyTo = isGroup ? groupId! : from;
+                const chatId = isGroup ? `wa_group_${groupId}` : `wa_${from}`;
+
+                logger.info(`[whatsapp] ${isGroup ? `Grupo ${groupId}` : `+${from}`}: "${text.slice(0, 80)}"`);
 
                 try {
                     await initMemory();
                     const reply = await processMessage(chatId, text);
-                    await sendWhatsAppReply(from, reply, value.metadata.phone_number_id);
-                    await notifyTelegramOwner(from, text, reply);
+                    await sendWhatsAppReply(replyTo, reply, value.metadata.phone_number_id);
+                    await notifyTelegramOwner(from, rawText, reply, isGroup ? groupId : undefined);
                 } catch (err) {
                     const errMsg = err instanceof Error ? err.message : String(err);
                     logger.error(`[whatsapp] Error procesando mensaje de ${from}:`, errMsg);
                     await sendWhatsAppReply(
-                        from,
-                        `❌ Error interno: ${errMsg.slice(0, 200)}`,
+                        replyTo,
+                        `❌ Error: ${errMsg.slice(0, 200)}`,
                         value.metadata.phone_number_id
                     ).catch(() => {});
                 }
@@ -85,11 +107,10 @@ async function processIncoming(payload: WhatsAppWebhookPayload) {
 async function sendWhatsAppReply(to: string, text: string, phoneNumberId: string) {
     const accessToken = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
     if (!accessToken) {
-        logger.error('[whatsapp] WHATSAPP_ACCESS_TOKEN no configurado — no se puede responder');
+        logger.error('[whatsapp] WHATSAPP_ACCESS_TOKEN no configurado');
         return;
     }
 
-    // WhatsApp tiene límite de 4096 chars por mensaje
     const chunks = splitMessage(text, 4000);
     for (const chunk of chunks) {
         const res = await fetch(
@@ -116,18 +137,25 @@ async function sendWhatsAppReply(to: string, text: string, phoneNumberId: string
     }
 }
 
-async function notifyTelegramOwner(from: string, userMsg: string, agentReply: string) {
+async function notifyTelegramOwner(
+    from: string,
+    userMsg: string,
+    agentReply: string,
+    groupId?: string
+) {
     const ownerChatId = process.env.TELEGRAM_OWNER_CHAT_ID?.trim();
     if (!ownerChatId) return;
-    const preview = (s: string, n: number) => s.length > n ? s.slice(0, n) + '…' : s;
+    const preview = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s);
+    const origin = groupId ? `👥 *Grupo WhatsApp* (de +${from})` : `📱 *WhatsApp* de +${from}`;
+    const replyCmd = groupId ? `/wa ${groupId} tu mensaje` : `/wa ${from} tu mensaje`;
     const text = [
-        `📱 *WhatsApp* de +${from}:`,
+        `${origin}:`,
         `_"${preview(userMsg, 300)}"_`,
         ``,
         `🤖 *Agente respondió:*`,
         `_"${preview(agentReply, 300)}"_`,
         ``,
-        `↩️ Para responder: \`/wa ${from} tu mensaje\``,
+        `↩️ Para intervenir: \`${replyCmd}\``,
     ].join('\n');
     await sendTelegramChatMessage(ownerChatId, text, 'Markdown').catch((e) =>
         logger.warn('[whatsapp] No se pudo notificar a Telegram:', e)
@@ -161,6 +189,8 @@ interface WhatsAppWebhookPayload {
                     timestamp: string;
                     type: string;
                     text?: { body: string };
+                    group_id?: string;
+                    context?: { group_id?: string; from?: string; id?: string };
                 }>;
             };
         }>;
