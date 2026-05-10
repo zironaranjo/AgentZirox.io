@@ -4,6 +4,7 @@ import { processMessage } from '../../../../core/agent';
 import { logger } from '../../../../core/logger';
 import { sendTelegramChatMessage } from '../../../../integrations/telegram/send-message';
 import { analyzeImageBase64, visionAvailable } from '../../../../core/vision';
+import { cacheImage } from '../../../../core/image-cache';
 
 const WA_API_VERSION = 'v19.0';
 
@@ -89,6 +90,8 @@ async function processIncoming(payload: WhatsAppWebhookPayload) {
                         try {
                             const { base64, mimeType } = await downloadWhatsAppMedia(mediaId);
                             visionResult = await analyzeImageBase64(base64, mimeType, caption);
+                            // Cachear imagen ~10 min para poder guardarla si el usuario lo pide
+                            cacheImage(chatId, { base64, mimeType, caption, senderName, senderNumber: from });
                         } catch (e) {
                             logger.warn('[whatsapp] Error analizando imagen:', e);
                             visionResult = '(no se pudo analizar la imagen)';
