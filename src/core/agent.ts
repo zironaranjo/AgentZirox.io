@@ -27,10 +27,14 @@ const ACTION_PHRASES = [
     'acabo de escribir', 'mensaje enviado',
     // Acciones genéricas reclamadas sin tool call
     'acabo de buscar', 'acabo de leer', 'acabo de crear', 'acabo de guardar',
+    // Guardado de imágenes / archivos
+    'he guardado', 'guardé', 'imagen guardada', 'la imagen fue guardada',
+    'imagen ha sido guardada', 'guardada en supabase', 'guardada en storage',
+    'url pública', 'url publica', 'storage.googleapis', 'supabase.co/storage',
 ];
 
 // Tools whose results must be shown verbatim — LLM rewrite drops critical info (e.g. post ID)
-const DIRECT_RESULT_TOOLS = new Set(['linkedin_propose_post']);
+const DIRECT_RESULT_TOOLS = new Set(['linkedin_propose_post', 'save_image', 'list_images']);
 
 async function processMessageInner(chatId: string, userMessage: string): Promise<string> {
     await saveMessage(chatId, 'user', userMessage);

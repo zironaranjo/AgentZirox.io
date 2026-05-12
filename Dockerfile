@@ -44,8 +44,11 @@ RUN npx tsup \
     src/tools/search-memory.ts \
     src/tools/send-email.ts \
     src/tools/set-provider.ts \
+    src/tools/save-image.ts \
     src/tools/update-user-context.ts \
     src/core/embeddings.ts \
+    src/core/storage.ts \
+    src/core/image-cache.ts \
     --format esm --out-dir dist-server --no-dts
 
 ENV NODE_ENV=production
