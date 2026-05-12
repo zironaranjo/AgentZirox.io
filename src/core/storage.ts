@@ -62,6 +62,23 @@ export async function uploadImageToStorage(
     return { publicUrl, record };
 }
 
+export async function deleteMedia(id: number): Promise<{ bucketPath: string }> {
+    const supabase = getClient();
+    const { data, error } = await supabase
+        .from('media')
+        .select('bucket_path')
+        .eq('id', id)
+        .single();
+    if (error || !data) throw new Error(`Imagen #${id} no encontrada`);
+    const { error: storageErr } = await supabase.storage
+        .from(BUCKET)
+        .remove([data.bucket_path]);
+    if (storageErr) throw new Error(`Error eliminando archivo: ${storageErr.message}`);
+    const { error: dbErr } = await supabase.from('media').delete().eq('id', id);
+    if (dbErr) throw new Error(`Error eliminando metadata: ${dbErr.message}`);
+    return { bucketPath: data.bucket_path };
+}
+
 export async function listMedia(chatId?: string, limit = 20): Promise<MediaRecord[]> {
     const supabase = getClient();
     let query = supabase

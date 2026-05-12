@@ -17,6 +17,10 @@ export function consumePendingTelegramImageUrl(chatId: string): string | undefin
     return u;
 }
 
+export function setPendingTelegramImageUrl(chatId: string, url: string): void {
+    pendingTelegramImageUrl.set(chatId, url);
+}
+
 function sleep(ms: number): Promise<void> {
     return new Promise((r) => setTimeout(r, ms));
 }
