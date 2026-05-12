@@ -1,0 +1,295 @@
+{
+  "_meta": {
+    "project": "AgentZirox.io",
+    "description": "Fuente de verdad del estado de features. Actualizar al iniciar y cerrar cada feature.",
+    "statuses": ["done", "in_progress", "planned", "blocked"]
+  },
+  "features": [
+    {
+      "id": "web-chat-interface",
+      "name": "Interfaz web de chat",
+      "status": "done",
+      "phase": 1,
+      "description": "UI React con tema cybernético, envío de mensajes y visualización de respuestas.",
+      "files": ["src/app/page.tsx", "src/app/api/chat/route.ts", "src/app/globals.css"]
+    },
+    {
+      "id": "telegram-bot",
+      "name": "Bot de Telegram",
+      "status": "done",
+      "phase": 1,
+      "description": "Bot con grammY, comandos /start /reset /status /tools /provider, notificaciones de eventos.",
+      "files": ["src/integrations/telegram/bot.ts", "src/integrations/telegram/send-message.ts"]
+    },
+    {
+      "id": "conversation-memory",
+      "name": "Memoria conversacional",
+      "status": "done",
+      "phase": 1,
+      "description": "Historial de mensajes en Supabase (primario) o SQLite (fallback). Facade pattern.",
+      "files": ["src/core/memory.ts", "src/core/memory-supabase.ts", "src/core/memory-sqlite.ts"]
+    },
+    {
+      "id": "tool-system",
+      "name": "Sistema de tools extensible",
+      "status": "done",
+      "phase": 1,
+      "description": "Dispatcher con registro dinámico, ejecución async, loop LLM hasta 8 iteraciones.",
+      "files": ["src/core/dispatcher.ts", "src/core/agent.ts", "src/tools/index.ts"]
+    },
+    {
+      "id": "email-send-receive",
+      "name": "Email (envío y lectura)",
+      "status": "done",
+      "phase": 1,
+      "description": "Envío por SMTP/Nodemailer, lectura de inbox por IMAP.",
+      "files": ["src/tools/send-email.ts", "src/tools/read-inbox.ts", "src/integrations/email/imap.ts"]
+    },
+    {
+      "id": "google-drive",
+      "name": "Google Drive",
+      "status": "done",
+      "phase": 1,
+      "description": "Crear carpetas, guardar emails importantes, archivar adjuntos. OAuth2.",
+      "files": ["src/tools/drive-create-folder.ts", "src/tools/drive-save-important-emails.ts", "src/tools/drive-archive-important-emails.ts", "src/integrations/google/google.ts"]
+    },
+    {
+      "id": "google-sheets-calendar",
+      "name": "Google Sheets & Calendar",
+      "status": "done",
+      "phase": 1,
+      "description": "Leer/escribir Sheets, crear/listar eventos en Calendar.",
+      "files": ["src/tools/google-sheets-calendar.ts"]
+    },
+    {
+      "id": "scheduled-tasks",
+      "name": "Tareas programadas",
+      "status": "done",
+      "phase": 1,
+      "description": "Recordatorios y tareas con fecha/hora, ejecutados por ticker cada 60s.",
+      "files": ["src/tools/schedule-task.ts", "src/core/process-scheduled.ts", "src/app/api/cron/scheduled-tasks/route.ts"]
+    },
+    {
+      "id": "daily-self-improve",
+      "name": "Auto-mejora diaria",
+      "status": "done",
+      "phase": 1,
+      "description": "Cron diario que analiza conversaciones recientes y actualiza el perfil del usuario.",
+      "files": ["src/core/daily-self-improve.ts", "src/app/api/cron/self-improve/route.ts"]
+    },
+    {
+      "id": "whatsapp-webhook",
+      "name": "WhatsApp webhook (texto e imágenes)",
+      "status": "done",
+      "phase": 1,
+      "description": "Recepción de mensajes de texto e imágenes, análisis con vision, soporte de grupos con triggers.",
+      "files": ["src/app/api/whatsapp/webhook/route.ts"]
+    },
+    {
+      "id": "whatsapp-send",
+      "name": "Envío de mensajes WhatsApp",
+      "status": "done",
+      "phase": 1,
+      "description": "Tool para enviar mensajes de texto por WhatsApp a cualquier número.",
+      "files": ["src/tools/send-whatsapp.ts"]
+    },
+    {
+      "id": "whatsapp-voice",
+      "name": "Notas de voz WhatsApp (TTS)",
+      "status": "done",
+      "phase": 1,
+      "description": "Tool para enviar notas de voz MP3 generadas con msedge-tts por WhatsApp.",
+      "files": ["src/tools/send-whatsapp-voice.ts"]
+    },
+    {
+      "id": "vision-image-analysis",
+      "name": "Análisis de imágenes (Vision)",
+      "status": "done",
+      "phase": 1,
+      "description": "Análisis automático de imágenes recibidas por WhatsApp con Claude Vision.",
+      "files": ["src/core/vision.ts", "src/core/image-cache.ts"]
+    },
+    {
+      "id": "supabase-image-storage",
+      "name": "Guardado de imágenes en Supabase Storage",
+      "status": "done",
+      "phase": 1,
+      "description": "Cache de imágenes recibidas (10min TTL), guardado explícito bajo petición en bucket whatsapp-media.",
+      "acceptance_criteria": [
+        "Bucket 'whatsapp-media' creado en Supabase como público",
+        "Tabla 'media' creada con migración 003_media_table.sql",
+        "Tool save_image disponible y funcional",
+        "Tool list_images disponible y funcional",
+        "Las imágenes NO se guardan automáticamente — solo bajo petición explícita"
+      ],
+      "files": ["src/core/storage.ts", "src/core/image-cache.ts", "src/tools/save-image.ts", "supabase/migrations/003_media_table.sql"],
+      "pending_manual_steps": [
+        "Crear bucket 'whatsapp-media' (público) en Supabase Storage dashboard",
+        "Ejecutar supabase/migrations/003_media_table.sql en Supabase SQL Editor"
+      ]
+    },
+    {
+      "id": "linkedin-publishing",
+      "name": "Publicación en LinkedIn",
+      "status": "done",
+      "phase": 1,
+      "description": "Propuesta de post con aprobación humana antes de publicar. OAuth2 + ugcPosts API.",
+      "files": ["src/tools/linkedin.ts", "src/integrations/linkedin/linkedin-api.ts"]
+    },
+    {
+      "id": "workspace-filesystem",
+      "name": "Sistema de archivos en workspace",
+      "status": "done",
+      "phase": 2,
+      "description": "Crear carpetas, escribir, leer, listar y añadir a archivos en workspace del VPS.",
+      "files": ["src/tools/create-folder.ts", "src/tools/write-file.ts", "src/tools/read-file.ts", "src/tools/list-files.ts", "src/tools/append-file.ts"]
+    },
+    {
+      "id": "web-search",
+      "name": "Búsqueda web",
+      "status": "done",
+      "phase": 2,
+      "description": "Búsqueda en internet con Serper, Tavily o DuckDuckGo.",
+      "files": ["src/tools/web-search.ts"]
+    },
+    {
+      "id": "youtube-transcript",
+      "name": "Transcripción de YouTube",
+      "status": "done",
+      "phase": 2,
+      "description": "Extrae los subtítulos/transcripciones de videos de YouTube.",
+      "files": ["src/tools/youtube-transcript.ts"]
+    },
+    {
+      "id": "image-generation",
+      "name": "Generación de imágenes con IA",
+      "status": "done",
+      "phase": 2,
+      "description": "Genera imágenes con KIE.ai o DALL-E. Integración con el flujo de LinkedIn.",
+      "files": ["src/tools/generate-image.ts"]
+    },
+    {
+      "id": "tts-generation",
+      "name": "Text-to-Speech (TTS)",
+      "status": "done",
+      "phase": 2,
+      "description": "Genera audio MP3/WEBM a partir de texto con msedge-tts.",
+      "files": ["src/tools/tts-generate.ts"]
+    },
+    {
+      "id": "crypto-prices",
+      "name": "Precios de criptomonedas",
+      "status": "done",
+      "phase": 2,
+      "description": "Consulta precios en tiempo real de crypto y acciones.",
+      "files": ["src/tools/get-price.ts"]
+    },
+    {
+      "id": "mcp-server",
+      "name": "Servidor MCP",
+      "status": "done",
+      "phase": 2,
+      "description": "Expone las tools del agente como servidor MCP para integración con Claude Desktop.",
+      "files": ["src/mcp/server.ts"]
+    },
+    {
+      "id": "knowledge-base",
+      "name": "Base de conocimiento",
+      "status": "done",
+      "phase": 2,
+      "description": "Tool para gestionar una base de conocimiento estructurada.",
+      "files": ["src/tools/knowledge.ts"]
+    },
+    {
+      "id": "client-workspace",
+      "name": "Workspaces de clientes",
+      "status": "done",
+      "phase": 2,
+      "description": "Crea workspace templado por cliente con estructura de carpetas estándar.",
+      "files": ["src/tools/create-client-workspace.ts"]
+    },
+    {
+      "id": "fetch-url",
+      "name": "Fetch y parseo de URLs",
+      "status": "done",
+      "phase": 2,
+      "description": "Descarga y parsea contenido de páginas web.",
+      "files": ["src/tools/fetch-url.ts"]
+    },
+    {
+      "id": "whatsapp-document-analysis",
+      "name": "Análisis de documentos WhatsApp (PDF, Word)",
+      "status": "planned",
+      "phase": 3,
+      "description": "Recibir documentos PDF o Word por WhatsApp y extraer su contenido para el agente.",
+      "acceptance_criteria": [
+        "El webhook detecta mensajes de tipo 'document'",
+        "Descarga y extrae texto de PDF con pdf-parse o similar",
+        "El contenido del documento se pasa al agente como contexto",
+        "Funciona con archivos hasta ~10MB"
+      ]
+    },
+    {
+      "id": "audio-transcription",
+      "name": "Transcripción de audios WhatsApp",
+      "status": "planned",
+      "phase": 3,
+      "description": "Transcribir mensajes de voz recibidos por WhatsApp a texto usando Whisper o Groq.",
+      "acceptance_criteria": [
+        "El webhook detecta mensajes de tipo 'audio'",
+        "Descarga el audio (OGG/Opus)",
+        "Transcribe con Groq Whisper o Whisper API",
+        "La transcripción se pasa al agente como texto del usuario"
+      ]
+    },
+    {
+      "id": "streaming-responses",
+      "name": "Respuestas en streaming",
+      "status": "planned",
+      "phase": 3,
+      "description": "Streaming de la respuesta del agente en la interfaz web para mejor UX.",
+      "acceptance_criteria": [
+        "El endpoint /api/chat soporta streaming con ReadableStream",
+        "La UI muestra el texto mientras se genera (token a token)",
+        "Funciona con todos los proveedores LLM actuales"
+      ]
+    },
+    {
+      "id": "auth-dashboard",
+      "name": "Dashboard con autenticación",
+      "status": "planned",
+      "phase": 3,
+      "description": "Panel de administración protegido con auth para gestionar el agente.",
+      "acceptance_criteria": [
+        "Login con usuario/contraseña o magic link",
+        "Vista de historial de conversaciones",
+        "Vista de tareas programadas activas",
+        "Vista de herramientas disponibles y su estado"
+      ]
+    },
+    {
+      "id": "multi-user-support",
+      "name": "Soporte multi-usuario",
+      "status": "planned",
+      "phase": 3,
+      "description": "El agente puede atender múltiples usuarios con perfiles y memoria separados.",
+      "acceptance_criteria": [
+        "Cada usuario tiene su propio chatId y memoria aislada",
+        "Sistema de onboarding para nuevos usuarios",
+        "Permisos diferenciados (owner vs. user)"
+      ]
+    },
+    {
+      "id": "whatsapp-video-analysis",
+      "name": "Análisis de videos WhatsApp",
+      "status": "planned",
+      "phase": 3,
+      "description": "Analizar videos cortos recibidos por WhatsApp (thumbnail + transcripción de audio).",
+      "acceptance_criteria": [
+        "El webhook procesa mensajes de tipo 'video'",
+        "Extrae thumbnail para análisis de vision",
+        "Transcribe el audio del video"
+      ]
+    }
+  ]
+}

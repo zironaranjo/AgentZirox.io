@@ -1,4 +1,5 @@
 import { logger } from './logger';
+import { embeddingAvailable, generateEmbedding } from './embeddings';
 import {
     initSqliteMemory,
     sqliteAddKnowledge,
@@ -28,6 +29,8 @@ import {
 } from './memory-sqlite';
 import {
     initSupabaseMemory,
+    supabaseUpdateMessageEmbedding,
+    supabaseSearchMessagesSemantic,
     supabaseAddKnowledge,
     supabaseCancelScheduledTaskForChat,
     supabaseClaimNextDueScheduledTask,
@@ -56,6 +59,7 @@ import {
 import type { KnowledgeRow, LinkedInPendingRow, ScheduledTaskRow } from './memory-sqlite';
 
 export type { KnowledgeRow, LinkedInPendingRow, ScheduledTaskRow } from './memory-sqlite';
+export type MemoryType = 'episodic' | 'semantic' | 'procedural';
 
 type Backend = 'sqlite' | 'supabase';
 
@@ -98,8 +102,22 @@ function b(): Backend {
     return backend;
 }
 
-export async function saveMessage(chatId: string, role: 'user' | 'assistant' | 'system', content: string) {
-    if (b() === 'supabase') return supabaseSaveMessage(chatId, role, content);
+export async function saveMessage(
+    chatId: string,
+    role: 'user' | 'assistant' | 'system',
+    content: string,
+    memoryType: MemoryType = 'episodic'
+): Promise<void> {
+    if (b() === 'supabase') {
+        const id = await supabaseSaveMessage(chatId, role, content, memoryType);
+        // Fire-and-forget: generate and store embedding for meaningful messages
+        if (embeddingAvailable() && content.length > 50 && role !== 'system') {
+            generateEmbedding(content)
+                .then((emb) => supabaseUpdateMessageEmbedding(id, emb))
+                .catch(() => { /* embedding is optional — silent fail */ });
+        }
+        return;
+    }
     sqliteSaveMessage(chatId, role, content);
 }
 
@@ -319,4 +337,88 @@ export async function listKnowledge(): Promise<KnowledgeRow[]> {
 export async function deleteKnowledge(id: number): Promise<boolean> {
     if (b() === 'supabase') return supabaseDeleteKnowledge(id);
     return sqliteDeleteKnowledge(id);
+}
+
+// ── Semantic search in message history ────────────────────────────────────────
+
+export async function searchMessagesSemantic(
+    chatId: string,
+    query: string,
+    limit = 10
+): Promise<Array<{ role: string; content: string; memory_type?: string; similarity?: number }>> {
+    if (b() === 'supabase' && embeddingAvailable()) {
+        const embedding = await generateEmbedding(query);
+        return supabaseSearchMessagesSemantic(chatId, embedding, limit);
+    }
+    // Fallback: keyword filter on recent history
+    const history = await getHistory(chatId, 100);
+    const lq = query.toLowerCase();
+    return history
+        .filter((m) => m.content.toLowerCase().includes(lq))
+        .slice(0, limit)
+        .map((m) => ({ ...m, memory_type: 'episodic', similarity: 1 }));
+}
+
+// ── User context (project-graph) ──────────────────────────────────────────────
+
+export interface UserContextProject {
+    name: string;
+    status: 'active' | 'paused' | 'done';
+    description: string;
+}
+
+export interface UserContextDecision {
+    date: string;
+    decision: string;
+    reason?: string;
+}
+
+export interface UserContext {
+    projects: UserContextProject[];
+    goals: string[];
+    decisions: UserContextDecision[];
+    current_focus: string;
+}
+
+const META_USER_CONTEXT = 'user_context';
+const USER_CONTEXT_BLOCK_TTL_MS = 60_000;
+let userContextBlockCache: { expiresAtMs: number; value: string } | null = null;
+
+export async function getUserContext(): Promise<UserContext> {
+    const raw = await getMeta(META_USER_CONTEXT);
+    if (!raw) return { projects: [], goals: [], decisions: [], current_focus: '' };
+    try { return JSON.parse(raw) as UserContext; } catch { return { projects: [], goals: [], decisions: [], current_focus: '' }; }
+}
+
+export async function saveUserContext(ctx: UserContext): Promise<void> {
+    userContextBlockCache = null;
+    await setMeta(META_USER_CONTEXT, JSON.stringify(ctx));
+}
+
+export async function getUserContextBlock(): Promise<string> {
+    if (userContextBlockCache && Date.now() < userContextBlockCache.expiresAtMs) {
+        return userContextBlockCache.value;
+    }
+
+    let ctx: UserContext;
+    try { ctx = await getUserContext(); } catch { return ''; }
+
+    const parts: string[] = [];
+    const activeProjects = ctx.projects.filter((p) => p.status === 'active');
+    if (activeProjects.length > 0) {
+        parts.push('**Proyectos activos:** ' + activeProjects.map((p) => `${p.name} — ${p.description}`).join(' | '));
+    }
+    if (ctx.current_focus) parts.push(`**Foco actual:** ${ctx.current_focus}`);
+    if (ctx.goals.length > 0) parts.push('**Objetivos:** ' + ctx.goals.join(', '));
+    if (ctx.decisions.length > 0) {
+        const recent = ctx.decisions.slice(-3);
+        parts.push('**Decisiones recientes:** ' + recent.map((d) => `${d.decision}${d.reason ? ` (${d.reason})` : ''}`).join(' | '));
+    }
+
+    const value = parts.length > 0
+        ? '\n\n---\n### Contexto del usuario\n' + parts.join('\n')
+        : '';
+
+    userContextBlockCache = { value, expiresAtMs: Date.now() + USER_CONTEXT_BLOCK_TTL_MS };
+    return value;
 }

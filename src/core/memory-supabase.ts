@@ -38,10 +38,35 @@ export async function initSupabaseMemory(): Promise<void> {
 export async function supabaseSaveMessage(
     chatId: string,
     role: 'user' | 'assistant' | 'system',
-    content: string
-): Promise<void> {
-    const { error } = await getClient().from('messages').insert({ chat_id: chatId, role, content });
+    content: string,
+    memoryType = 'episodic'
+): Promise<number> {
+    const { data, error } = await getClient()
+        .from('messages')
+        .insert({ chat_id: chatId, role, content, memory_type: memoryType })
+        .select('id')
+        .single();
     if (error) throw new Error(`Supabase messages insert: ${error.message}`);
+    return (data as { id: number }).id;
+}
+
+export async function supabaseUpdateMessageEmbedding(id: number, embedding: number[]): Promise<void> {
+    const { error } = await getClient().from('messages').update({ embedding }).eq('id', id);
+    if (error) throw new Error(`Supabase updateMessageEmbedding: ${error.message}`);
+}
+
+export async function supabaseSearchMessagesSemantic(
+    chatId: string,
+    embedding: number[],
+    limit = 10
+): Promise<Array<{ role: string; content: string; memory_type: string; similarity: number }>> {
+    const { data, error } = await getClient().rpc('search_messages_semantic', {
+        p_embedding: embedding,
+        p_chat_id: chatId,
+        p_limit: limit,
+    });
+    if (error) throw new Error(`Supabase searchMessagesSemantic: ${error.message}`);
+    return (data ?? []) as Array<{ role: string; content: string; memory_type: string; similarity: number }>;
 }
 
 export async function supabaseGetHistory(

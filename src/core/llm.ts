@@ -1,6 +1,6 @@
 import Groq from 'groq-sdk';
 import OpenAI from 'openai';
-import { getUserProfileBlock, listPendingScheduledForChat, listLinkedInPendingPostsForChat } from './memory';
+import { getUserProfileBlock, getUserContextBlock, listPendingScheduledForChat, listLinkedInPendingPostsForChat } from './memory';
 import { getToolContext } from './tool-context';
 import { logger } from './logger';
 
@@ -81,7 +81,7 @@ function getProvider(): Provider {
 }
 
 export async function buildSystemPrompt(): Promise<string> {
-    const profile = await getUserProfileBlock();
+    const [profile, userContext] = await Promise.all([getUserProfileBlock(), getUserContextBlock()]);
     const now = new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
 
     let pendingTasksBlock = '';
@@ -128,7 +128,7 @@ export async function buildSystemPrompt(): Promise<string> {
         : 'Estás en la interfaz web. La web tiene entrada de voz por micrófono del navegador (Web Speech API): el usuario puede hablar y la transcripción llega como texto. SI el usuario pregunta si puedes escucharle por el micro de su ordenador/web, dile que SÍ — el orbe reconoce su voz directamente en el navegador y te envía la transcripción.';
 
     return `Eres AgenteZirox, un agente de IA personal altamente capaz.
-Canal actual: ${channel}. ${channelContext}
+Canal actual: ${channel}. ${channelContext}${userContext}
 Tienes acceso a herramientas para enviar emails, llamar APIs externas, buscar en tu memoria, buscar en internet (web_search) y más.
 Cuando el usuario pida investigar, buscar en la web, datos actuales, correos o telefonos de empresas, o "que dice internet", usa la tool web_search con una consulta clara.
 Si pide crear, generar o dibujar una imagen, ilustracion, banner o logo visual (aunque lo diga en plan simple: "haz una foto de...", "una imagen de un cohete"), usa generate_image con un prompt descriptivo. El usuario no tiene que nombrar la herramienta. Backend: KIE_API_KEY (Kie.ai) o OPENAI_API_KEY; opcional IMAGE_GENERATION_PROVIDER=kie|openai para forzar.
