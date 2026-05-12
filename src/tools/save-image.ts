@@ -112,14 +112,14 @@ registerTool({
 
         // Buscar por ID (#3) o por texto en caption/vision_description
         const idMatch = query.match(/^#?(\d+)$/);
-        let found = idMatch
+        const found = idMatch
             ? records.find(r => r.id === Number(idMatch[1]))
             : records.find(r =>
                 r.caption.toLowerCase().includes(query.toLowerCase()) ||
                 r.vision_description.toLowerCase().includes(query.toLowerCase())
-            ) ?? records[0]; // fallback a la más reciente
+            );
 
-        if (!found) return `No encontré ninguna imagen que coincida con "${query}".`;
+        if (!found) return `No encontré ninguna imagen que coincida con "${query}". Usa list_images para ver las disponibles.`;
 
         // Encolar URL para que el bot de Telegram la envíe como foto
         setPendingTelegramImageUrl(chatId, found.public_url);
