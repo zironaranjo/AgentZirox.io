@@ -12,6 +12,7 @@ import { isLinkedInOAuthConfigured, publishLinkedInFeedPost } from '../linkedin/
 import { listTools } from '../../core/dispatcher';
 import { logger } from '../../core/logger';
 import { consumePendingTelegramImageUrl } from '../../tools/generate-image';
+import { cacheImage } from '../../core/image-cache';
 
 const lastTranscriptionByChat = new Map<string, string>();
 
@@ -299,12 +300,26 @@ export async function startTelegramBot() {
 
     // ── Photo handler ────────────────────────────────────────────────────────
     bot.on('message:photo', async (ctx) => {
+        const chatId = String(ctx.chat.id);
+        const caption = ctx.message.caption ?? '';
+        const senderName = ctx.from?.first_name ?? 'Usuario';
+        const senderNumber = String(ctx.from?.id ?? chatId);
+
         await ctx.replyWithChatAction('typing');
         try {
             await ctx.reply('🖼️ Recibido. Estoy analizando la imagen...');
             const bestPhoto = ctx.message.photo[ctx.message.photo.length - 1];
-            const analysis = await analyzeTelegramPhoto(ctx, bestPhoto.file_id, ctx.message.caption);
-            await sendLongReply(ctx, analysis);
+
+            const { base64, mimeType } = await downloadTelegramPhoto(ctx, bestPhoto.file_id);
+            const analysis = await analyzeTelegramPhotoFromBase64(base64, caption);
+
+            // Cache para poder guardar si el usuario pide "guarda esta imagen"
+            cacheImage(chatId, { base64, mimeType, caption, senderName, senderNumber });
+
+            // Pasar por el agente para que quede en memoria y pueda usar tools
+            const textForAgent = `[IMAGEN RECIBIDA]\n${caption ? `El usuario dice: "${caption}"\n` : ''}Descripción automática: ${analysis}`;
+            const response = await processMessage(chatId, textForAgent);
+            await sendAgentReplyWithOptionalImage(ctx, chatId, response);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             logger.error('Telegram photo handler error:', msg);
@@ -433,56 +448,33 @@ function isAudioCapabilityQuestion(text: string): boolean {
     );
 }
 
-async function analyzeTelegramPhoto(
+async function downloadTelegramPhoto(
     ctx: Context,
-    fileId: string,
-    caption?: string
-): Promise<string> {
+    fileId: string
+): Promise<{ base64: string; mimeType: string }> {
     const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-    const openRouterApiKey = process.env.OPENROUTER_API_KEY;
-    const visionModel = process.env.OPENROUTER_VISION_MODEL ?? 'openai/gpt-4o-mini';
-
     if (!telegramToken) throw new Error('TELEGRAM_BOT_TOKEN no configurado');
-    if (!openRouterApiKey) {
-        throw new Error('OPENROUTER_API_KEY no configurado para analisis de imagen');
-    }
 
     const telegramFile = await ctx.api.getFile(fileId);
-    if (!telegramFile.file_path) {
-        throw new Error('No se pudo obtener la ruta de la imagen en Telegram');
-    }
+    if (!telegramFile.file_path) throw new Error('No se pudo obtener la ruta de la imagen en Telegram');
 
     const fileUrl = `https://api.telegram.org/file/bot${telegramToken}/${telegramFile.file_path}`;
     const fileRes = await fetch(fileUrl);
-    if (!fileRes.ok) {
-        throw new Error(`No se pudo descargar la imagen de Telegram (${fileRes.status})`);
-    }
+    if (!fileRes.ok) throw new Error(`No se pudo descargar la imagen de Telegram (${fileRes.status})`);
 
     const imageBuffer = Buffer.from(await fileRes.arrayBuffer());
-    const imageBase64 = imageBuffer.toString('base64');
+    return { base64: imageBuffer.toString('base64'), mimeType: 'image/jpeg' };
+}
+
+async function analyzeTelegramPhotoFromBase64(base64: string, caption?: string): Promise<string> {
+    const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+    const visionModel = process.env.OPENROUTER_VISION_MODEL ?? 'openai/gpt-4o-mini';
+
+    if (!openRouterApiKey) throw new Error('OPENROUTER_API_KEY no configurado para analisis de imagen');
+
     const prompt =
         (caption?.trim() ? `Peticion del usuario: ${caption.trim()}\n\n` : '') +
         'Analiza esta imagen en espanol. Describe lo relevante y responde de forma util y concreta.';
-
-    const payload = {
-        model: visionModel,
-        messages: [
-            {
-                role: 'user',
-                content: [
-                    { type: 'text', text: prompt },
-                    {
-                        type: 'image_url',
-                        image_url: {
-                            url: `data:image/jpeg;base64,${imageBase64}`,
-                        },
-                    },
-                ],
-            },
-        ],
-        temperature: 0.2,
-        max_tokens: 800,
-    };
 
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -492,7 +484,18 @@ async function analyzeTelegramPhoto(
             'HTTP-Referer': 'https://agentezirox.io',
             'X-Title': 'AgenteZirox',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+            model: visionModel,
+            messages: [{
+                role: 'user',
+                content: [
+                    { type: 'text', text: prompt },
+                    { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
+                ],
+            }],
+            temperature: 0.2,
+            max_tokens: 800,
+        }),
     });
 
     if (!res.ok) {
@@ -500,13 +503,9 @@ async function analyzeTelegramPhoto(
         throw new Error(`Fallo de vision (${res.status}): ${errText}`);
     }
 
-    const json = (await res.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-    };
+    const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
     const content = json.choices?.[0]?.message?.content?.trim();
-    if (!content) {
-        throw new Error('El modelo no devolvio analisis de imagen');
-    }
+    if (!content) throw new Error('El modelo no devolvio analisis de imagen');
 
-    return `🖼️ Analisis de imagen:\n\n${content}`;
+    return content;
 }
