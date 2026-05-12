@@ -49,6 +49,14 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         for (let i = history.length - 1; i >= 0; i--) {
             if (history[i].role === 'assistant') { lastBotContent = history[i].content; break; }
         }
+        // Fast path: confirm save_image when bot asked "¿quieres guardar la imagen?"
+        const botAskedToSave = /guarda[r]?\s*(esta\s*)?(imagen|foto)|¿quieres\s*que\s*guarde/i.test(lastBotContent);
+        if (botAskedToSave) {
+            logger.info('[agent] Fast-path save_image (confirmación de usuario)');
+            const result = await executeTool('save_image', {});
+            await saveMessage(chatId, 'assistant', result);
+            return result;
+        }
         const liApproveMatch = lastBotContent.match(/\/li_approve\s+(\d+)/);
         if (liApproveMatch) {
             const postId = parseInt(liApproveMatch[1], 10);
@@ -73,7 +81,12 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
     }
 
     const conversation: ChatMessage[] = [...history];
-    const tools = getToolDefinitions();
+    // Exclude save_image from tool list when processing photo analysis messages
+    // to prevent the LLM from saving proactively before the user asks
+    const isImageReceival = userMessage.startsWith('[IMAGEN RECIBIDA]');
+    const tools = isImageReceival
+        ? getToolDefinitions().filter(t => !['save_image', 'list_images'].includes(t.name))
+        : getToolDefinitions();
     const toolNames = tools.map((t) => t.name);
 
     let response = await callLLM(conversation, tools);
