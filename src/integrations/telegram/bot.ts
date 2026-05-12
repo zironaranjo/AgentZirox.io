@@ -16,6 +16,20 @@ import { cacheImage } from '../../core/image-cache';
 
 const lastTranscriptionByChat = new Map<string, string>();
 
+// Dedup: evita procesar el mismo mensaje de Telegram dos veces
+// (Telegram reenvía updates si el bot no responde en ~60s)
+const processedMessageIds = new Set<number>();
+function isDuplicate(msgId: number): boolean {
+    if (processedMessageIds.has(msgId)) return true;
+    processedMessageIds.add(msgId);
+    // Limpiar IDs viejos cada 500 entradas para no crecer infinito
+    if (processedMessageIds.size > 500) {
+        const first = processedMessageIds.values().next().value!;
+        processedMessageIds.delete(first);
+    }
+    return false;
+}
+
 export async function startTelegramBot() {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) throw new Error('TELEGRAM_BOT_TOKEN not set in .env');
@@ -225,6 +239,7 @@ export async function startTelegramBot() {
 
     // ── Main message handler ──────────────────────────────────────────────────
     bot.on('message:text', async (ctx) => {
+        if (isDuplicate(ctx.message.message_id)) return;
         const chatId = String(ctx.chat.id);
         const userText = ctx.message.text;
 
@@ -300,6 +315,7 @@ export async function startTelegramBot() {
 
     // ── Photo handler ────────────────────────────────────────────────────────
     bot.on('message:photo', async (ctx) => {
+        if (isDuplicate(ctx.message.message_id)) return;
         const chatId = String(ctx.chat.id);
         const caption = ctx.message.caption ?? '';
         const senderName = ctx.from?.first_name ?? 'Usuario';
