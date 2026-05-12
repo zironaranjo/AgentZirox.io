@@ -105,7 +105,7 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
     // to prevent the LLM from saving proactively before the user asks
     const isImageReceival = userMessage.startsWith('[IMAGEN RECIBIDA]');
     const tools = isImageReceival
-        ? getToolDefinitions().filter(t => !['save_image', 'list_images'].includes(t.name))
+        ? getToolDefinitions().filter(t => !['save_image', 'list_images', 'generate_image'].includes(t.name))
         : getToolDefinitions();
     const toolNames = tools.map((t) => t.name);
 

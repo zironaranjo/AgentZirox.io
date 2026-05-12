@@ -333,7 +333,7 @@ export async function startTelegramBot() {
             cacheImage(chatId, { base64, mimeType, caption, senderName, senderNumber });
 
             // Pasar por el agente para que quede en memoria y pueda usar tools
-            const textForAgent = `[IMAGEN RECIBIDA]\n${caption ? `El usuario dice: "${caption}"\n` : ''}Descripción automática: ${analysis}`;
+            const textForAgent = `[IMAGEN RECIBIDA]\n${caption ? `El usuario dice: "${caption}"\n` : ''}Descripción automática: ${analysis}\n\nPregunta brevemente al usuario qué quiere hacer con la imagen (guardarla, analizarla, etc.). No hagas nada más de forma automática.`;
             const response = await processMessage(chatId, textForAgent);
             await sendAgentReplyWithOptionalImage(ctx, chatId, response);
         } catch (err) {
