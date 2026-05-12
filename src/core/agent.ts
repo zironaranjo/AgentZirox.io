@@ -59,6 +59,17 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         }
     }
 
+    // Fast path: explicit save-image request — LLM is unreliable calling save_image
+    const isSaveImageRequest = /\b(guarda|archiva|salva|guarde|guardar)\b.{0,30}\b(imagen|foto|photo|picture)\b|\b(imagen|foto|photo|picture)\b.{0,30}\b(guarda|archiva|salva|guardar)\b/i.test(userMessage);
+    if (isSaveImageRequest) {
+        const labelMatch = userMessage.match(/(?:como|con etiqueta|etiqueta[:]?)\s+(.+)/i);
+        const label = labelMatch ? labelMatch[1].trim() : '';
+        logger.info(`[agent] Fast-path save_image${label ? ` label="${label}"` : ''}`);
+        const result = await executeTool('save_image', label ? { label } : {});
+        await saveMessage(chatId, 'assistant', result);
+        return result;
+    }
+
     const conversation: ChatMessage[] = [...history];
     const tools = getToolDefinitions();
     const toolNames = tools.map((t) => t.name);
