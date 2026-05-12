@@ -1,0 +1,138 @@
+import { getCachedImage } from './image-cache';
+
+// ── Intent types ──────────────────────────────────────────────────────────────
+
+export interface IntentSaveImage {
+    type: 'save_image';
+    label?: string;
+}
+
+export interface IntentListImages {
+    type: 'list_images';
+    limit?: number;
+}
+
+export interface IntentDeleteImage {
+    type: 'delete_image';
+    id: number;
+}
+
+export interface IntentGetSavedImage {
+    type: 'get_saved_image';
+    query: string;
+}
+
+export interface IntentApproveLinkedIn {
+    type: 'approve_linkedin';
+    postId?: number;
+}
+
+/** Fallthrough to LLM — carries context that agent.ts uses to filter tools */
+export interface IntentLLM {
+    type: 'llm';
+    isImageReceival: boolean;
+    cachedImageExists: boolean;
+}
+
+export type Intent =
+    | IntentSaveImage
+    | IntentListImages
+    | IntentDeleteImage
+    | IntentGetSavedImage
+    | IntentApproveLinkedIn
+    | IntentLLM;
+
+// ── Router ────────────────────────────────────────────────────────────────────
+
+/**
+ * Classifies a user message into a typed Intent without calling the LLM.
+ * Returns IntentLLM as fallthrough for anything that requires the full agent loop.
+ */
+export function routeIntent(
+    userMessage: string,
+    lastBotContent: string,
+    chatId: string
+): Intent {
+    const msg = userMessage.trim();
+
+    // [IMAGEN RECIBIDA] is a synthetic message from the photo handler — always LLM
+    if (msg.startsWith('[IMAGEN RECIBIDA]')) {
+        return { type: 'llm', isImageReceival: true, cachedImageExists: false };
+    }
+
+    const cachedImg = getCachedImage(chatId);
+    const cachedImageExists = Boolean(cachedImg);
+
+    // ── 1. Simple approval ────────────────────────────────────────────────────
+    const isApproval = /^(si|sí|sip|dale|adelante|aprueba|aprobad[oa]|aprovad[oa]|hazlo|publícalo|publicalo|ok|okey|venga|vamos|perfecto|listo|aprobado|aprovado|aprobada|aprovada)[\s.!?]*$/i.test(msg);
+
+    if (isApproval) {
+        const botAskedSave = /guarda[r]?\s*(esta\s*)?(imagen|foto)|¿quieres\s*que\s*guarde/i.test(lastBotContent);
+        if (botAskedSave) return { type: 'save_image' };
+
+        const liMatch = lastBotContent.match(/\/li_approve\s+(\d+)/);
+        if (liMatch) return { type: 'approve_linkedin', postId: parseInt(liMatch[1], 10) };
+    }
+
+    // ── 2. Save image — explicit ("imagen"/"foto" in message) ─────────────────
+    const hasSaveVerb = /\b(guarda|archiva|salva|guarde|guardar)\b/i.test(msg);
+    const hasImageNoun = /\b(imagen|foto|photo|picture)\b/i.test(msg);
+
+    if (hasSaveVerb && hasImageNoun) {
+        const label = extractLabel(msg);
+        return { type: 'save_image', label };
+    }
+
+    // ── 3. Save image — cached photo + any save verb (no "imagen" needed) ─────
+    if (cachedImageExists && hasSaveVerb) {
+        const isNonImageTarget = /\b(archivo|nota|texto|calendar|tarea|idea|recuerda|pensamiento)\b/i.test(msg);
+        if (!isNonImageTarget) {
+            const label = extractLabel(msg);
+            return { type: 'save_image', label };
+        }
+    }
+
+    // ── 4. List images ────────────────────────────────────────────────────────
+    if (
+        /\b(lista|listar|ver|muestra|cuántas|cuantas|tengo)\b.{0,30}\b(imágenes|imagenes|fotos)\b/i.test(msg) ||
+        /\b(imágenes|imagenes|fotos)\b.{0,20}\b(guard|almacen)/i.test(msg)
+    ) {
+        const limitMatch = msg.match(/(\d+)\s*(imágenes|imagenes|fotos)/i);
+        const limit = limitMatch ? parseInt(limitMatch[1], 10) : undefined;
+        return { type: 'list_images', limit };
+    }
+
+    // ── 5. Delete image — by numeric ID ──────────────────────────────────────
+    const deleteByIdMatch =
+        msg.match(/\b(borra|elimina|borrar|eliminar|quita|quitar|delete)\b.{0,40}#(\d+)/i) ||
+        msg.match(/#(\d+).{0,20}\b(borra|elimina|borrar|eliminar|delete)\b/i);
+
+    if (deleteByIdMatch) {
+        const rawId = deleteByIdMatch[2] ?? deleteByIdMatch[1];
+        const id = parseInt(rawId, 10);
+        if (!isNaN(id)) return { type: 'delete_image', id };
+    }
+
+    // ── 6. Delete image — by text description (needs LLM to resolve ID) ──────
+    // Handled by LLM with only media tools, not intercepted here for now.
+
+    // ── 7. Get/retrieve saved image ───────────────────────────────────────────
+    if (
+        /\b(muéstrame|muestrame|dame|envíame|enviame|tráeme|traeme|ver|muestra)\b.{0,30}\b(imagen|foto|picture|guardad)\b/i.test(msg) ||
+        /\b(imagen|foto)\b.{0,20}\b(del|de la|que dice|llamad)\b/i.test(msg)
+    ) {
+        const queryMatch =
+            msg.match(/(?:imagen|foto|picture)\s+(?:del?\s+|de\s+la\s+|que\s+(?:dice|es|muestra)\s+|llamad[ao]\s+)?(.+)/i) ||
+            msg.match(/(?:muéstrame|muestrame|dame|tráeme|traeme|envíame|enviame)\s+(.+)/i);
+        const query = queryMatch?.[1]?.trim() ?? msg;
+        return { type: 'get_saved_image', query };
+    }
+
+    // ── Default: LLM ─────────────────────────────────────────────────────────
+    return { type: 'llm', isImageReceival: false, cachedImageExists };
+}
+
+function extractLabel(msg: string): string | undefined {
+    const m = msg.match(/\b(?:como|con etiqueta|etiqueta[:]?)\s+(.+)/i);
+    return m?.[1]?.trim();
+}

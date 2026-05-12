@@ -339,6 +339,38 @@ export async function deleteKnowledge(id: number): Promise<boolean> {
     return sqliteDeleteKnowledge(id);
 }
 
+// ── Smart context: recent messages + semantically relevant older ones ─────────
+
+/**
+ * Returns up to `limit` messages for the agent context window.
+ * Combines the most recent messages with semantically relevant older ones
+ * so the agent can recall past conversations even beyond the last-N limit.
+ */
+export async function getSmartContext(
+    chatId: string,
+    query: string,
+    limit = 20
+): Promise<Array<{ role: string; content: string }>> {
+    const recentCount = Math.ceil(limit * 0.65);      // ~65% recent
+    const semanticCount = Math.floor(limit * 0.35);   // ~35% semantic
+
+    const [recent, semantic] = await Promise.all([
+        getHistory(chatId, recentCount),
+        searchMessagesSemantic(chatId, query, semanticCount + recentCount),
+    ]);
+
+    // Build a set of recent message contents to avoid duplicates
+    const recentSet = new Set(recent.map((m) => m.content));
+
+    // Add semantic results that are not already in the recent window
+    const extra = semantic
+        .filter((m) => !recentSet.has(m.content))
+        .slice(0, semanticCount);
+
+    // Merge: semantic context first (older), then recent (newer) — chronological read order
+    return [...extra, ...recent];
+}
+
 // ── Semantic search in message history ────────────────────────────────────────
 
 export async function searchMessagesSemantic(
