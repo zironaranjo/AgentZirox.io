@@ -13,8 +13,9 @@ RUN apt-get update && apt-get install -y \
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# código fuente — ARG aquí invalida el cache a partir de COPY
-ARG CACHEBUST=1
+# código fuente — se copia src/ primero para que Docker detecte cambios
+# y invalide el cache en cada deploy con código nuevo
+COPY src/ ./src/
 COPY . .
 
 # Paso 1: compilar Next.js (genera .next/)
