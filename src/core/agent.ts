@@ -60,7 +60,9 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
     }
 
     // Fast path: explicit save-image request — LLM is unreliable calling save_image
-    const isSaveImageRequest = /\b(guarda|archiva|salva|guarde|guardar)\b.{0,30}\b(imagen|foto|photo|picture)\b|\b(imagen|foto|photo|picture)\b.{0,30}\b(guarda|archiva|salva|guardar)\b/i.test(userMessage);
+    // Exclude synthetic [IMAGEN RECIBIDA] messages from the photo handler
+    const isSaveImageRequest = !userMessage.startsWith('[IMAGEN RECIBIDA]') &&
+        /\b(guarda|archiva|salva|guarde|guardar)\b.{0,30}\b(imagen|foto|photo|picture)\b|\b(imagen|foto|photo|picture)\b.{0,30}\b(guarda|archiva|salva|guardar)\b/i.test(userMessage);
     if (isSaveImageRequest) {
         const labelMatch = userMessage.match(/(?:como|con etiqueta|etiqueta[:]?)\s+(.+)/i);
         const label = labelMatch ? labelMatch[1].trim() : '';
