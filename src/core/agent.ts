@@ -4,6 +4,7 @@ import { getToolDefinitions, executeTool } from './dispatcher';
 import { logger } from './logger';
 import { runWithToolContext } from './tool-context';
 import { routeIntent } from './intent-router';
+import { classifyDomain, getDomainToolSet } from './domain-router';
 
 // Bootstrap all tools on first import
 import '../tools/index';
@@ -106,9 +107,24 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
     const conversation: ChatMessage[] = [...history];
 
     const allTools = getToolDefinitions();
-    const tools = isImageReceival
-        ? allTools.filter(t => !IMAGE_RECEIVAL_EXCLUDED_TOOLS.has(t.name))
-        : allTools;
+
+    // ── Domain routing — filter tools to the relevant subset ─────────────────
+    // isImageReceival overrides domain (strongest signal).
+    // 'general' domain → null toolSet → expose all tools (backward-compatible).
+    let tools: typeof allTools;
+    if (isImageReceival) {
+        tools = allTools.filter(t => !IMAGE_RECEIVAL_EXCLUDED_TOOLS.has(t.name));
+    } else {
+        const domain = classifyDomain(userMessage);
+        const domainToolSet = getDomainToolSet(domain);
+        tools = domainToolSet
+            ? allTools.filter(t => domainToolSet.has(t.name))
+            : allTools;
+        if (domain !== 'general') {
+            logger.info(`[trace:${traceId}] domain=${domain} tools=${tools.map(t => t.name).join(',')}`);
+        }
+    }
+
     const toolNames = tools.map((t) => t.name);
 
     // Warn the LLM when a cached photo exists — prevents it from calling generate_image
