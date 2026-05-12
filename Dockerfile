@@ -1,5 +1,8 @@
 FROM node:20-bullseye-slim
 
+# Pasa --build-arg CACHEBUST=$(date +%s) en cada deploy para romper cache
+ARG CACHEBUST=1
+
 WORKDIR /app
 
 # herramientas de compilación para better-sqlite3
@@ -41,6 +44,8 @@ RUN npx tsup \
     src/tools/search-memory.ts \
     src/tools/send-email.ts \
     src/tools/set-provider.ts \
+    src/tools/update-user-context.ts \
+    src/core/embeddings.ts \
     --format esm --out-dir dist-server --no-dts
 
 ENV NODE_ENV=production
