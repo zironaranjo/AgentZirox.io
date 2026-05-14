@@ -41,8 +41,9 @@ const ACTION_PHRASES = [
 const DIRECT_RESULT_TOOLS = new Set(['linkedin_propose_post', 'save_image', 'list_images']);
 
 // After these tools execute, stop the agent loop immediately.
-// Prevents hallucination-retry from re-calling save_image after cache is cleared (⚠️ double-response).
-const STOP_AFTER_TOOLS = new Set(['save_image', 'list_images']);
+// linkedin_propose_post: its result contains "/li_approve" which triggers the hallucination
+// detector on the next LLM call, forcing it to auto-approve without user confirmation.
+const STOP_AFTER_TOOLS = new Set(['save_image', 'list_images', 'linkedin_propose_post']);
 
 // Tools excluded when processing an incoming photo — prevents proactive saves/generation.
 const IMAGE_RECEIVAL_EXCLUDED_TOOLS = new Set(['save_image', 'list_images', 'generate_image']);
@@ -168,11 +169,7 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
             // Stop immediately after tools with verbatim output (prevents double-call on retry).
             if (response.toolCalls.some(tc => STOP_AFTER_TOOLS.has(tc.name))) break agentLoop;
 
-            // Reset hallucination counter per tool-batch.
-            // Exception: after linkedin_propose_post keep the counter so the loop ends there
-            // and prevents the LLM from auto-approving without user confirmation.
-            const justProposed = executedToolNames.includes('linkedin_propose_post');
-            if (!justProposed) hallucinationRetries = 0;
+            hallucinationRetries = 0;
             response = await callLLM(conversation, tools);
 
         } else {
