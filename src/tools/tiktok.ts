@@ -59,13 +59,13 @@ async function updatePending(id: number, update: Partial<TikTokPendingRow>): Pro
 registerTool({
     name: 'tiktok_propose_video',
     description:
-        'Encola un video para publicar en TikTok con tu aprobación. El usuario debe proporcionar la URL del video (MP4 accesible públicamente) y el caption/descripción. Nunca publiques sin /tt_approve.',
+        'Encola un video para publicar en TikTok con tu aprobación. REQUISITO OBLIGATORIO: el usuario debe haber proporcionado explícitamente una URL de video MP4 real en su mensaje. NUNCA inventes, generes ni adivines una URL — si el usuario no proporcionó una URL concreta, NO llames esta herramienta y pídele la URL primero. Nunca publiques sin /tt_approve.',
     parameters: {
         type: 'object',
         properties: {
             video_url: {
                 type: 'string',
-                description: 'URL pública y directa del video MP4 a publicar.',
+                description: 'URL pública y directa del video MP4 a publicar. DEBE ser una URL real proporcionada explícitamente por el usuario — nunca la inventes.',
             },
             caption: {
                 type: 'string',
