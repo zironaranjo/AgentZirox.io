@@ -35,19 +35,17 @@ const ACTION_PHRASES = [
     'he guardado', 'guardé', 'imagen guardada', 'la imagen fue guardada',
     'imagen ha sido guardada', 'guardada en supabase', 'guardada en storage',
     'url pública', 'url publica', 'storage.googleapis', 'supabase.co/storage',
-    // Schedule/reminder claims
-    'te he recordado', 'lo he programado', 'he programado', 'ya lo programé',
-    'recordatorio programado', 'tarea programada', 'ya lo agendé', 'lo tengo programado',
-    'programado para las', 'agendado para',
+    // Schedule/reminder claims (only unambiguous hallucination phrases — avoid tool output text)
+    'te he recordado', 'ya lo programé', 'ya lo agendé',
 ];
 
 // Tools whose results must be returned verbatim — LLM rewrite drops critical info (e.g. post ID).
 const DIRECT_RESULT_TOOLS = new Set(['linkedin_propose_post', 'save_image', 'list_images']);
 
 // After these tools execute, stop the agent loop immediately.
-// linkedin_propose_post: its result contains "/li_approve" which triggers the hallucination
-// detector on the next LLM call, forcing it to auto-approve without user confirmation.
-const STOP_AFTER_TOOLS = new Set(['save_image', 'list_images', 'linkedin_propose_post']);
+// linkedin_propose_post: result contains "/li_approve" — triggers hallucination detector → auto-approve.
+// schedule_task: result contains "Tarea programada" — triggers detector → duplicate schedule + self-cancel.
+const STOP_AFTER_TOOLS = new Set(['save_image', 'list_images', 'linkedin_propose_post', 'schedule_task']);
 
 // Tools excluded when processing an incoming photo — prevents proactive saves/generation.
 const IMAGE_RECEIVAL_EXCLUDED_TOOLS = new Set(['save_image', 'list_images', 'generate_image']);
