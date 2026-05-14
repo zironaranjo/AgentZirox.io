@@ -182,6 +182,10 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
             if (response.toolCalls.some(tc => STOP_AFTER_TOOLS.has(tc.name))) break agentLoop;
 
             hallucinationRetries = 0;
+            // Prevent calling generate_image more than once per request (expensive + confusing).
+            if (executedToolNames.includes('generate_image')) {
+                tools = tools.filter(t => t.name !== 'generate_image');
+            }
             response = await callLLM(conversation, tools);
 
         } else {
@@ -243,8 +247,8 @@ function applyImageUrlFix(
 
     let realImageUrl: string | null = null;
 
-    // 1. Current turn results (generate_image already executed this iteration)
-    const genIdx = executedToolNames.indexOf('generate_image');
+    // 1. Current turn results — use LAST generate_image in case it was called multiple times.
+    const genIdx = executedToolNames.lastIndexOf('generate_image');
     if (genIdx !== -1) {
         const m = executedToolResults[genIdx].match(/🔗\s*(https:\/\/\S+)/);
         if (m) realImageUrl = m[1];
