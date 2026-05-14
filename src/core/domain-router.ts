@@ -73,7 +73,8 @@ export function classifyDomain(msg: string): Domain {
 
     if (/\b(imagen|foto|genera|genera[r]|diseña|ilustr|dall.e|stable.diffusion|midjourney|audio|voz|tts|generar\s+voz|youtube\.com|youtu\.be|transcripci[oó]n)\b/.test(t)) return 'media';
 
-    if (/\b(email|correo|inbox|bandeja|whatsapp|mensaje.*whats|manda|env[ií]a|nota\s+de\s+voz)\b/.test(t)) return 'comms';
+    if (/\b(email|correo|inbox|bandeja|whatsapp|mensaje.*whats|nota\s+de\s+voz)\b/.test(t) ||
+        /\b(manda|env[ií]a)\s+(un\s+)?(correo|email|mensaje|whatsapp|nota|foto|archivo)\b/.test(t)) return 'comms';
 
     if (/\b(google\s+drive|drive|archiva.*email|emails?\s+importantes?|guardar.*email)\b/.test(t)) return 'drive';
 
