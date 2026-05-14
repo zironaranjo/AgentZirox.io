@@ -50,6 +50,9 @@ const STOP_AFTER_TOOLS = new Set(['save_image', 'list_images', 'linkedin_propose
 // Tools excluded when processing an incoming photo — prevents proactive saves/generation.
 const IMAGE_RECEIVAL_EXCLUDED_TOOLS = new Set(['save_image', 'list_images', 'generate_image']);
 
+// Tools excluded when a scheduled task fires — prevents the agent from re-scheduling (infinite loop).
+const SCHEDULED_EXEC_EXCLUDED_TOOLS = new Set(['schedule_task', 'list_scheduled_tasks', 'cancel_scheduled_task']);
+
 async function processMessageInner(chatId: string, userMessage: string): Promise<string> {
     const traceId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     logger.info(`[trace:${traceId}] chatId=${chatId} msg="${userMessage.slice(0, 80)}"`);
@@ -114,6 +117,7 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
     // ── Domain routing — filter tools to the relevant subset ─────────────────
     // isImageReceival overrides domain (strongest signal).
     // 'general' domain → null toolSet → expose all tools (backward-compatible).
+    const isScheduledTaskFire = userMessage.startsWith('⏰ **Tarea programada**');
     let tools: typeof allTools;
     if (isImageReceival) {
         tools = allTools.filter(t => !IMAGE_RECEIVAL_EXCLUDED_TOOLS.has(t.name));
@@ -126,6 +130,11 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         if (domain !== 'general') {
             logger.info(`[trace:${traceId}] domain=${domain} tools=${tools.map(t => t.name).join(',')}`);
         }
+    }
+    // Scheduled task execution: strip scheduling tools to prevent re-schedule loops.
+    if (isScheduledTaskFire) {
+        tools = tools.filter(t => !SCHEDULED_EXEC_EXCLUDED_TOOLS.has(t.name));
+        logger.info(`[trace:${traceId}] scheduled-exec: excluded schedule tools`);
     }
 
     const toolNames = tools.map((t) => t.name);

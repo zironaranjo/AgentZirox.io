@@ -94,8 +94,8 @@ export async function tickScheduledTasksInternal(): Promise<{ processed: number;
 
             try {
                 const prompt =
-                    `⏰ **Tarea programada**\n\n${task.instruction}\n\n` +
-                    `Cumple lo anterior ahora (búsqueda web, resumen, etc.). Sé concreto.`;
+                    `⏰ **Tarea programada** (ejecución automática)\n\n${task.instruction}\n\n` +
+                    `Ejecuta lo anterior AHORA y responde directamente al usuario. NO llames schedule_task ni programes nada nuevo — esto ya ES la ejecución del recordatorio.`;
                 const reply = await processMessage(task.chat_id, prompt);
                 await deliverScheduledReply(task.chat_id, `🔔 *Recordatorio*\n\n${reply}`);
                 await markScheduledTaskDone(task.id);
