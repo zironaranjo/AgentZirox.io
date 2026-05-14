@@ -243,6 +243,7 @@ registerTool({
         },
         required: ['prompt'],
     },
+    timeoutMs: 210_000,
     handler: async (args) => {
         const { prompt, size: sizeRaw, save_relative_path } = args as {
             prompt: string;

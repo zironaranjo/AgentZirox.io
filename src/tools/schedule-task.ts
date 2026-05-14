@@ -46,7 +46,10 @@ registerTool({
         const runAtMs = parseRunAtMs(runAtIso);
         const minAhead = 60_000;
         if (runAtMs < Date.now() + minAhead) {
-            throw new Error('La fecha debe ser al menos ~1 minuto en el futuro');
+            const nowIso = new Date().toISOString();
+            throw new Error(
+                `La fecha debe ser al menos ~1 minuto en el futuro. Hora actual del servidor (UTC): ${nowIso}. Usa esa hora como base y suma los minutos necesarios.`
+            );
         }
 
         const id = await insertScheduledTask(ctx.chatId, instruction, runAtMs);

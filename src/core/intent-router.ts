@@ -60,6 +60,10 @@ export function routeIntent(
         return { type: 'llm', isImageReceival: true, cachedImageExists: false };
     }
 
+    // ── 0. Direct /li_approve or /li_reject slash commands ───────────────────
+    const liApproveCmd = msg.match(/^\/li_approve\s+(\d+)/i);
+    if (liApproveCmd) return { type: 'approve_linkedin', postId: parseInt(liApproveCmd[1], 10) };
+
     const cachedImg = getCachedImage(chatId);
     const cachedImageExists = Boolean(cachedImg);
 
