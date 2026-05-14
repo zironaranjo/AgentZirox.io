@@ -158,8 +158,9 @@ registerTool({
         required: ['post_text'],
     },
     handler: async (args) => {
-        const { post_text, visibility: visRaw, image_url: imageRaw } = args as {
-            post_text: string;
+        const { post_text, text: textAlias, visibility: visRaw, image_url: imageRaw } = args as {
+            post_text?: string;
+            text?: string;
             visibility?: string;
             image_url?: string;
         };
@@ -179,7 +180,7 @@ registerTool({
             ].join('\n');
         }
 
-        const text = post_text.trim();
+        const text = (post_text ?? textAlias ?? '').trim();
         if (!text) {
             throw new Error('post_text vacio');
         }

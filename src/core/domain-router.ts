@@ -69,7 +69,7 @@ export const CORE_TOOLS = new Set<string>([
 export function classifyDomain(msg: string): Domain {
     const t = msg.toLowerCase();
 
-    if (/\b(linkedin|post de linkedin|publicaci[oó]n|draft|borrador|redacta.*post|escribir.*post)\b/.test(t)) return 'linkedin';
+    if (/\b(linkedin|post de linkedin|publicaci[oó]n|draft|borrador|redacta.*post|escribir.*post|crea.*post|haz.*post|escrib[ei].*post|\bpost\s+(sobre|de|con|para|acerca|en linkedin))\b/.test(t)) return 'linkedin';
 
     if (/\b(imagen|foto|genera|genera[r]|diseña|ilustr|dall.e|stable.diffusion|midjourney|audio|voz|tts|generar\s+voz|youtube\.com|youtu\.be|transcripci[oó]n)\b/.test(t)) return 'media';
 
