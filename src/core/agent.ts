@@ -105,6 +105,13 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
             await saveMessage(chatId, 'assistant', result);
             return result;
         }
+        case 'approve_tiktok': {
+            logger.info(`[agent] approve_tiktok${intent.postId ? ` postId=${intent.postId}` : ''}`);
+            const args = intent.postId ? { post_id: intent.postId } : {};
+            const result = await executeTool('approve_tiktok_video', args);
+            await saveMessage(chatId, 'assistant', result);
+            return result;
+        }
         // 'llm' falls through to the agent loop below
     }
 

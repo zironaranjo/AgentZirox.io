@@ -5,6 +5,7 @@ export type Domain =
     | 'media'        // image generation/storage, TTS, YouTube
     | 'comms'        // email, WhatsApp
     | 'linkedin'     // social media drafts & posting
+    | 'tiktok'       // TikTok video publishing
     | 'productivity' // local files, calendar, tasks, Sheets, notes
     | 'drive'        // Google Drive archiving
     | 'research'     // web search, URLs, prices
@@ -30,6 +31,9 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
         'approve_linkedin_post', 'reject_linkedin_post',
         'generate_image',
         'web_search',
+    ],
+    tiktok: [
+        'tiktok_propose_video', 'approve_tiktok_video', 'reject_tiktok_video', 'tiktok_list_pending',
     ],
     productivity: [
         'schedule_task', 'list_scheduled_tasks', 'cancel_scheduled_task',
@@ -68,6 +72,8 @@ export const CORE_TOOLS = new Set<string>([
  */
 export function classifyDomain(msg: string): Domain {
     const t = msg.toLowerCase();
+
+    if (/\b(tiktok|tik\s*tok|sube.*video|publica.*video|video.*tiktok|short[s]?)\b/.test(t)) return 'tiktok';
 
     if (/\b(linkedin|post de linkedin|publicaci[oó]n|draft|borrador|redacta.*post|escribir.*post|crea.*post|haz.*post|escrib[ei].*post|\bpost\s+(sobre|de|con|para|acerca|en linkedin))\b/.test(t)) return 'linkedin';
 

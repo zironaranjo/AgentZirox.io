@@ -34,12 +34,18 @@ export interface IntentLLM {
     cachedImageExists: boolean;
 }
 
+export interface IntentApproveTikTok {
+    type: 'approve_tiktok';
+    postId?: number;
+}
+
 export type Intent =
     | IntentSaveImage
     | IntentListImages
     | IntentDeleteImage
     | IntentGetSavedImage
     | IntentApproveLinkedIn
+    | IntentApproveTikTok
     | IntentLLM;
 
 // ── Router ────────────────────────────────────────────────────────────────────
@@ -60,9 +66,12 @@ export function routeIntent(
         return { type: 'llm', isImageReceival: true, cachedImageExists: false };
     }
 
-    // ── 0. Direct /li_approve or /li_reject slash commands ───────────────────
+    // ── 0. Direct slash commands ─────────────────────────────────────────────
     const liApproveCmd = msg.match(/^\/li_approve\s+(\d+)/i);
     if (liApproveCmd) return { type: 'approve_linkedin', postId: parseInt(liApproveCmd[1], 10) };
+
+    const ttApproveCmd = msg.match(/^\/tt_approve(?:\s+(\d+))?/i);
+    if (ttApproveCmd) return { type: 'approve_tiktok', postId: ttApproveCmd[1] ? parseInt(ttApproveCmd[1], 10) : undefined };
 
     const cachedImg = getCachedImage(chatId);
     const cachedImageExists = Boolean(cachedImg);
