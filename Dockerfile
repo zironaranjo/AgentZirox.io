@@ -1,8 +1,5 @@
 FROM node:20-bullseye-slim
 
-# Pasa --build-arg CACHEBUST=$(date +%s) en cada deploy para romper cache
-ARG CACHEBUST=1
-
 WORKDIR /app
 
 # herramientas de compilación para better-sqlite3
@@ -12,12 +9,15 @@ RUN apt-get update && apt-get install -y \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# dependencias
+# dependencias (cacheado mientras package.json no cambie)
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# código fuente — se copia src/ primero para que Docker detecte cambios
-# y invalide el cache en cada deploy con código nuevo
+# CACHEBUST aquí — invalida COPY src/ y todo lo posterior cuando cambia
+# En Dokploy: Build Args → CACHEBUST = <timestamp o número creciente>
+ARG CACHEBUST=1
+RUN echo "Cache bust: $CACHEBUST"
+
 COPY src/ ./src/
 COPY . .
 
