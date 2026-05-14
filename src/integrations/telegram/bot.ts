@@ -12,6 +12,7 @@ import { isLinkedInOAuthConfigured, publishLinkedInFeedPost } from '../linkedin/
 import { listTools } from '../../core/dispatcher';
 import { logger } from '../../core/logger';
 import { consumePendingTelegramImageUrl } from '../../tools/generate-image';
+import { consumePendingTelegramAudioPath } from '../../tools/tts-generate';
 import { cacheImage } from '../../core/image-cache';
 
 const lastTranscriptionByChat = new Map<string, string>();
@@ -354,12 +355,11 @@ export async function startTelegramBot() {
     });
 }
 
-/** Si generate_image dejo URL pendiente para este chat, envia la foto antes del texto. */
+/** Si generate_image o tts_generate dejaron pendientes, los envía antes del texto. */
 async function sendAgentReplyWithOptionalImage(ctx: Context, chatId: string, response: string) {
     const imageUrl = consumePendingTelegramImageUrl(chatId);
     if (imageUrl) {
         try {
-            // Descargar y subir como buffer para evitar que la URL de KIE expire
             const res = await fetch(imageUrl);
             if (res.ok) {
                 const buf = Buffer.from(await res.arrayBuffer());
@@ -371,6 +371,17 @@ async function sendAgentReplyWithOptionalImage(ctx: Context, chatId: string, res
             logger.warn('No se pudo enviar foto; el texto incluye el enlace.', e);
         }
     }
+
+    const audioPath = consumePendingTelegramAudioPath(chatId);
+    if (audioPath) {
+        try {
+            const buf = await import('node:fs/promises').then(f => f.readFile(audioPath));
+            await ctx.replyWithAudio(new InputFile(buf, 'audio.mp3'));
+        } catch (e) {
+            logger.warn('No se pudo enviar audio TTS.', e);
+        }
+    }
+
     await sendLongReply(ctx, response);
 }
 

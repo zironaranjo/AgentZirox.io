@@ -1,7 +1,16 @@
 import { registerTool } from '../core/dispatcher';
+import { getToolContext } from '../core/tool-context';
 import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+const pendingTelegramAudioPath = new Map<string, string>();
+
+export function consumePendingTelegramAudioPath(chatId: string): string | undefined {
+    const p = pendingTelegramAudioPath.get(chatId);
+    if (p) pendingTelegramAudioPath.delete(chatId);
+    return p;
+}
 
 const VOICES: Record<string, string> = {
     elvira: 'es-ES-ElviraNeural',
@@ -65,14 +74,16 @@ registerTool({
         const stat = await fs.stat(outputPath);
         const kb = (stat.size / 1024).toFixed(1);
 
+        const tctx = getToolContext();
+        if (tctx?.chatId) {
+            pendingTelegramAudioPath.set(tctx.chatId, outputPath);
+        }
+
         return [
             `🎙️ Audio generado correctamente`,
-            `📁 Archivo: ${outputPath}`,
             `🗣️ Voz: ${voice}`,
             `📊 Tamaño: ${kb} KB`,
             `📝 Texto (${text.length} chars): "${text.slice(0, 80)}${text.length > 80 ? '…' : ''}"`,
-            ``,
-            `file://${outputPath}`,
         ].join('\n');
     },
 });
