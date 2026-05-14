@@ -35,6 +35,10 @@ const ACTION_PHRASES = [
     'he guardado', 'guardé', 'imagen guardada', 'la imagen fue guardada',
     'imagen ha sido guardada', 'guardada en supabase', 'guardada en storage',
     'url pública', 'url publica', 'storage.googleapis', 'supabase.co/storage',
+    // Schedule/reminder claims
+    'te he recordado', 'lo he programado', 'he programado', 'ya lo programé',
+    'recordatorio programado', 'tarea programada', 'ya lo agendé', 'lo tengo programado',
+    'programado para las', 'agendado para',
 ];
 
 // Tools whose results must be returned verbatim — LLM rewrite drops critical info (e.g. post ID).
