@@ -46,6 +46,7 @@ RUN npx tsup \
     src/tools/set-provider.ts \
     src/tools/save-image.ts \
     src/tools/update-user-context.ts \
+    src/tools/generate-video.ts \
     src/core/embeddings.ts \
     src/core/storage.ts \
     src/core/image-cache.ts \

@@ -18,6 +18,7 @@ export type Domain =
 export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
     media: [
         'generate_image',
+        'generate_video',
         'save_image', 'list_images', 'delete_image', 'get_saved_image',
         'tts_generate',
         'youtube_transcript',
@@ -33,6 +34,7 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
         'web_search',
     ],
     tiktok: [
+        'generate_video',
         'tiktok_propose_video', 'approve_tiktok_video', 'reject_tiktok_video', 'tiktok_list_pending',
     ],
     productivity: [
@@ -73,11 +75,11 @@ export const CORE_TOOLS = new Set<string>([
 export function classifyDomain(msg: string): Domain {
     const t = msg.toLowerCase();
 
-    if (/\b(tiktok|tik\s*tok|sube.*video|publica.*video|video.*tiktok|short[s]?)\b/.test(t)) return 'tiktok';
+    if (/\b(tiktok|tik\s*tok|sube.*video|publica.*video|video.*tiktok|short[s]?|genera.*video.*tiktok|crea.*video.*tiktok)\b/.test(t)) return 'tiktok';
 
     if (/\b(linkedin|post de linkedin|publicaci[oó]n|draft|borrador|redacta.*post|escribir.*post|crea.*post|haz.*post|escrib[ei].*post|\bpost\s+(sobre|de|con|para|acerca|en linkedin))\b/.test(t)) return 'linkedin';
 
-    if (/\b(imagen|foto|genera|genera[r]|diseña|ilustr|dall.e|stable.diffusion|midjourney|audio|voz|tts|generar\s+voz|youtube\.com|youtu\.be|transcripci[oó]n)\b/.test(t)) return 'media';
+    if (/\b(imagen|foto|genera|genera[r]|diseña|ilustr|dall.e|stable.diffusion|midjourney|audio|voz|tts|generar\s+voz|generar?\s+video|crea[r]?\s+video|video.*veo|veo\s*3|youtube\.com|youtu\.be|transcripci[oó]n)\b/.test(t)) return 'media';
 
     if (/\b(email|correo|inbox|bandeja|whatsapp|mensaje.*whats|nota\s+de\s+voz)\b/.test(t) ||
         /\b(manda|env[ií]a)\s+(un\s+)?(correo|email|mensaje|whatsapp|nota|foto|archivo)\b/.test(t)) return 'comms';

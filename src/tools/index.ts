@@ -33,3 +33,4 @@ import './knowledge';
 import './save-image';
 import './update-user-context';
 import './tiktok';
+import './generate-video';
