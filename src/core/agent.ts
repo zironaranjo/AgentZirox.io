@@ -46,7 +46,7 @@ const DIRECT_RESULT_TOOLS = new Set(['linkedin_propose_post', 'save_image', 'lis
 // linkedin_propose_post: result contains "/li_approve" — triggers hallucination detector → auto-approve.
 // schedule_task removed: ACTION_PHRASES no longer contains "Tarea programada", so multiple tasks
 // can be created in one loop (user asks for two tasks at once).
-const STOP_AFTER_TOOLS = new Set(['save_image', 'list_images', 'linkedin_propose_post', 'tiktok_propose_video', 'generate_video']);
+const STOP_AFTER_TOOLS = new Set(['save_image', 'list_images', 'linkedin_propose_post', 'tiktok_propose_video', 'generate_video', 'approve_tiktok_video', 'reject_tiktok_video']);
 
 // Tools excluded when processing an incoming photo — prevents proactive saves/generation.
 const IMAGE_RECEIVAL_EXCLUDED_TOOLS = new Set(['save_image', 'list_images', 'generate_image']);

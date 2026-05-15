@@ -116,7 +116,14 @@ export async function publishTikTokVideo(
 ): Promise<{ publishId: string }> {
     const token = await getAccessToken();
 
-    const res = await fetch(TIKTOK_VIDEO_INIT_URL, {
+    // Descargar el video para usar FILE_UPLOAD (PULL_FROM_URL requiere dominio verificado)
+    const dlRes = await fetch(videoUrl);
+    if (!dlRes.ok) throw new Error(`No se pudo descargar el video de Kie: ${dlRes.status}`);
+    const videoBuffer = Buffer.from(await dlRes.arrayBuffer());
+    const videoSize = videoBuffer.length;
+
+    // 1. Iniciar subida
+    const initRes = await fetch(TIKTOK_VIDEO_INIT_URL, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${token}`,
@@ -131,20 +138,42 @@ export async function publishTikTokVideo(
                 video_cover_timestamp_ms: 1000,
             },
             source_info: {
-                source: 'PULL_FROM_URL',
-                video_url: videoUrl,
+                source: 'FILE_UPLOAD',
+                video_size: videoSize,
+                chunk_size: videoSize,
+                total_chunk_count: 1,
             },
         }),
     });
 
-    const data = await res.json() as {
-        data?: { publish_id?: string };
+    const initData = await initRes.json() as {
+        data?: { publish_id?: string; upload_url?: string };
         error?: { code?: string; message?: string; log_id?: string };
     };
 
-    if (!res.ok || (data.error?.code && data.error.code !== 'ok')) {
-        throw new Error(`TikTok publish failed: ${data.error?.message ?? JSON.stringify(data)}`);
+    if (!initRes.ok || (initData.error?.code && initData.error.code !== 'ok')) {
+        throw new Error(`TikTok init failed: ${initData.error?.message ?? JSON.stringify(initData)}`);
     }
 
-    return { publishId: data.data?.publish_id ?? '' };
+    const publishId = initData.data?.publish_id ?? '';
+    const uploadUrl = initData.data?.upload_url;
+    if (!uploadUrl) throw new Error('TikTok no devolvió upload_url');
+
+    // 2. Subir el archivo
+    const uploadRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'video/mp4',
+            'Content-Range': `bytes 0-${videoSize - 1}/${videoSize}`,
+            'Content-Length': String(videoSize),
+        },
+        body: videoBuffer,
+    });
+
+    if (!uploadRes.ok) {
+        const body = await uploadRes.text();
+        throw new Error(`TikTok upload failed: ${uploadRes.status} ${body.slice(0, 200)}`);
+    }
+
+    return { publishId };
 }
