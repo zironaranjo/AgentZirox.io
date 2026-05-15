@@ -62,7 +62,7 @@ async function kieGenerateVideoUrl(prompt: string): Promise<string> {
 
     // 3. Polling hasta completar (máx 10 min, polling cada 10s)
     const maxMs = 600_000;
-    const intervalMs = 10_000;
+    const intervalMs = 20_000;
     const start = Date.now();
 
     while (Date.now() - start < maxMs) {
@@ -91,7 +91,10 @@ async function kieGenerateVideoUrl(prompt: string): Promise<string> {
             throw new Error(`KIE-VEO recordInfo no JSON: ${infoRaw.slice(0, 400)}`);
         }
 
-        if (!infoRes.ok || infoJson.code !== 200 || !infoJson.data) {
+        // 422 + "recordInfo is null" = tarea todavía encolada, seguir esperando
+        if (infoJson.code === 422 || !infoJson.data) continue;
+
+        if (!infoRes.ok || infoJson.code !== 200) {
             throw new Error(`KIE-VEO recordInfo error: ${infoJson.msg ?? infoRes.status}`);
         }
 
