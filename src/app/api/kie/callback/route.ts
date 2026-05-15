@@ -1,8 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHmac } from 'crypto';
 import { consumePendingVideo } from '../../../../integrations/kie/pending-videos';
 import { insertPending } from '../../../../integrations/tiktok/pending-posts';
 import { sendTelegramChatMessage } from '../../../../integrations/telegram/send-message';
 import { logger } from '../../../../core/logger';
+
+function verifyKieSignature(body: string, req: NextRequest): boolean {
+    const hmacKey = process.env.KIE_WEBHOOK_HMAC_KEY?.trim();
+    if (!hmacKey) return true; // sin clave configurada → skip verificación
+
+    // Kie puede usar cualquiera de estos headers
+    const sig =
+        req.headers.get('x-kie-signature') ??
+        req.headers.get('x-hmac-signature') ??
+        req.headers.get('x-signature');
+
+    if (!sig) {
+        logger.warn('[KIE-CALLBACK] sin header de firma — aceptando igual');
+        return true; // cabecera aún desconocida; no bloqueamos
+    }
+
+    const expected = createHmac('sha256', hmacKey).update(body).digest('hex');
+    return sig === expected;
+}
 
 function extractVideoUrl(body: Record<string, unknown>): string | undefined {
     // Intentar varios formatos de respuesta de Kie
@@ -22,9 +42,16 @@ function extractVideoUrl(body: Record<string, unknown>): string | undefined {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+    const rawBody = await req.text();
+
+    if (!verifyKieSignature(rawBody, req)) {
+        logger.warn('[KIE-CALLBACK] firma inválida — rechazando');
+        return NextResponse.json({ ok: false, error: 'invalid signature' }, { status: 401 });
+    }
+
     let body: Record<string, unknown>;
     try {
-        body = await req.json() as Record<string, unknown>;
+        body = JSON.parse(rawBody) as Record<string, unknown>;
     } catch {
         return NextResponse.json({ ok: false, error: 'invalid json' }, { status: 400 });
     }
