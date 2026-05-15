@@ -47,6 +47,8 @@ RUN npx tsup \
     src/tools/save-image.ts \
     src/tools/update-user-context.ts \
     src/tools/generate-video.ts \
+    src/integrations/kie/pending-videos.ts \
+    src/integrations/tiktok/pending-posts.ts \
     src/core/embeddings.ts \
     src/core/storage.ts \
     src/core/image-cache.ts \
