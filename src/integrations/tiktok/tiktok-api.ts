@@ -1,6 +1,8 @@
 const TIKTOK_AUTH_URL = 'https://www.tiktok.com/v2/auth/authorize/';
 const TIKTOK_TOKEN_URL = 'https://open.tiktokapis.com/v2/oauth/token/';
-const TIKTOK_VIDEO_INIT_URL = 'https://open.tiktokapis.com/v2/post/publish/video/init/';
+// video.upload scope → posts to creator inbox (drafts). After app review, switch to
+// /v2/post/publish/video/init/ with video.publish scope for direct posting.
+const TIKTOK_VIDEO_INIT_URL = 'https://open.tiktokapis.com/v2/post/publish/inbox/video/init/';
 
 export function isTikTokConfigured(): boolean {
     return Boolean(
@@ -13,7 +15,7 @@ export function isTikTokConfigured(): boolean {
 export function getTikTokAuthUrl(redirectUri: string, state: string): string {
     const params = new URLSearchParams({
         client_key: process.env.TIKTOK_CLIENT_KEY ?? '',
-        scope: 'user.info.basic,video.publish',
+        scope: 'user.info.basic,video.upload',
         response_type: 'code',
         redirect_uri: redirectUri,
         state,
@@ -110,7 +112,7 @@ export type TikTokPrivacy =
 export async function publishTikTokVideo(
     videoUrl: string,
     caption: string,
-    privacy: TikTokPrivacy
+    _privacy: TikTokPrivacy
 ): Promise<{ publishId: string }> {
     const token = await getAccessToken();
 
@@ -123,7 +125,6 @@ export async function publishTikTokVideo(
         body: JSON.stringify({
             post_info: {
                 title: caption.slice(0, 2200),
-                privacy_level: privacy,
                 disable_duet: false,
                 disable_comment: false,
                 disable_stitch: false,
