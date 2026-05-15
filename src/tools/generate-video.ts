@@ -101,7 +101,6 @@ async function kieGenerateVideoUrl(prompt: string): Promise<string> {
         const { state, resultJson, failMsg, failCode, info } = infoJson.data;
 
         if (state === 'success' || state === 'Success') {
-            // Intentar info.resultUrls primero, luego resultJson (igual que images)
             let videoUrl: string | undefined;
 
             if (info?.resultUrls) {
@@ -111,8 +110,13 @@ async function kieGenerateVideoUrl(prompt: string): Promise<string> {
                 videoUrl = urls[0];
             } else if (resultJson) {
                 try {
-                    const parsed = JSON.parse(resultJson) as { resultUrls?: string[] };
-                    videoUrl = parsed.resultUrls?.[0];
+                    const parsed = JSON.parse(resultJson);
+                    // Kie devuelve array directo ["url"] o objeto {resultUrls: ["url"]}
+                    if (Array.isArray(parsed)) {
+                        videoUrl = parsed[0] as string;
+                    } else {
+                        videoUrl = (parsed as { resultUrls?: string[] }).resultUrls?.[0];
+                    }
                 } catch { /* ignorar */ }
             }
 
