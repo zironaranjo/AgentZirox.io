@@ -60,80 +60,75 @@ async function kieGenerateVideoUrl(prompt: string): Promise<string> {
         ).catch(() => {});
     }
 
-    // 3. Polling hasta completar (máx 10 min, polling cada 10s)
-    const maxMs = 600_000;
+    // 3. Polling: intentar /veo/task primero, fallback a /jobs/recordInfo
+    // Máx 2 min (el agente no debe quedar bloqueado si Kie falla)
+    const maxMs = 120_000;
     const intervalMs = 20_000;
     const start = Date.now();
+
+    const POLL_URLS = [
+        `${KIE_BASE}/api/v1/veo/task?taskId=${encodeURIComponent(taskId)}`,
+        `${KIE_BASE}/api/v1/veo/record?taskId=${encodeURIComponent(taskId)}`,
+        `${KIE_BASE}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
+    ];
 
     while (Date.now() - start < maxMs) {
         await sleep(intervalMs);
 
-        const infoRes = await fetch(`${KIE_BASE}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
-            headers: { Authorization: `Bearer ${apiKey}` },
-        });
-        const infoRaw = await infoRes.text();
-        logger.info(`[KIE-VEO] jobs/recordInfo status=${infoRes.status} body=${infoRaw.slice(0, 600)}`);
+        for (const pollUrl of POLL_URLS) {
+            const infoRes = await fetch(pollUrl, {
+                headers: { Authorization: `Bearer ${apiKey}` },
+            });
+            const infoRaw = await infoRes.text();
+            logger.info(`[KIE-VEO] poll ${pollUrl.split('/api')[1]} status=${infoRes.status} body=${infoRaw.slice(0, 400)}`);
 
-        let infoJson: {
-            code?: number;
-            msg?: string;
-            data?: {
-                state?: string;
-                failCode?: string;
-                failMsg?: string;
-                resultJson?: string;
-                info?: { resultUrls?: string[] | string };
+            if (infoRes.status === 404) continue;
+
+            let infoJson: {
+                code?: number; msg?: string;
+                data?: {
+                    state?: string; failCode?: string; failMsg?: string;
+                    resultJson?: string;
+                    info?: { resultUrls?: string[] | string };
+                };
             };
-        };
-        try {
-            infoJson = JSON.parse(infoRaw) as typeof infoJson;
-        } catch {
-            throw new Error(`KIE-VEO recordInfo no JSON: ${infoRaw.slice(0, 400)}`);
-        }
+            try { infoJson = JSON.parse(infoRaw) as typeof infoJson; }
+            catch { continue; }
 
-        // 422 + "recordInfo is null" = tarea todavía encolada, seguir esperando
-        if (infoJson.code === 422 || !infoJson.data) continue;
+            if (infoJson.code === 422 || !infoJson.data) continue;
+            if (infoJson.code !== 200) continue;
 
-        if (!infoRes.ok || infoJson.code !== 200) {
-            throw new Error(`KIE-VEO recordInfo error: ${infoJson.msg ?? infoRes.status}`);
-        }
+            const { state, resultJson, failMsg, failCode, info } = infoJson.data;
 
-        const { state, resultJson, failMsg, failCode, info } = infoJson.data;
-
-        if (state === 'success' || state === 'Success') {
-            let videoUrl: string | undefined;
-
-            if (info?.resultUrls) {
-                const urls = Array.isArray(info.resultUrls)
-                    ? info.resultUrls
-                    : (JSON.parse(info.resultUrls as string) as string[]);
-                videoUrl = urls[0];
-            } else if (resultJson) {
-                try {
-                    const parsed = JSON.parse(resultJson);
-                    // Kie devuelve array directo ["url"] o objeto {resultUrls: ["url"]}
-                    if (Array.isArray(parsed)) {
-                        videoUrl = parsed[0] as string;
-                    } else {
-                        videoUrl = (parsed as { resultUrls?: string[] }).resultUrls?.[0];
-                    }
-                } catch { /* ignorar */ }
+            if (state === 'success' || state === 'Success') {
+                let videoUrl: string | undefined;
+                if (info?.resultUrls) {
+                    const urls = Array.isArray(info.resultUrls)
+                        ? info.resultUrls
+                        : (JSON.parse(info.resultUrls as string) as string[]);
+                    videoUrl = urls[0];
+                } else if (resultJson) {
+                    try {
+                        const parsed = JSON.parse(resultJson);
+                        videoUrl = Array.isArray(parsed)
+                            ? (parsed[0] as string)
+                            : (parsed as { resultUrls?: string[] }).resultUrls?.[0];
+                    } catch { /* ignorar */ }
+                }
+                if (!videoUrl) throw new Error('KIE-VEO completó sin URL de video.');
+                return videoUrl;
             }
 
-            if (!videoUrl) {
-                throw new Error('KIE-VEO completó pero no se encontró URL de video en la respuesta.');
+            if (/falla|fail/i.test(state ?? '')) {
+                throw new Error(`KIE-VEO generación fallida: ${failMsg || failCode || state}`);
             }
-            return videoUrl;
-        }
 
-        if (/falla|fail/i.test(state ?? '')) {
-            throw new Error(`KIE-VEO generación fallida: ${failMsg || failCode || state}`);
+            // Estado en curso → salir del for, esperar el próximo ciclo
+            break;
         }
-
-        // Estados en curso → seguir polling
     }
 
-    throw new Error(`KIE-VEO: tiempo de espera agotado (${maxMs / 1000}s) para taskId ${taskId}.`);
+    return `KIE_PENDING:${taskId}`;
 }
 
 registerTool({
@@ -153,18 +148,28 @@ registerTool({
         },
         required: ['prompt'],
     },
-    timeoutMs: 660_000,
+    timeoutMs: 180_000,
     handler: async (args) => {
         const { prompt } = args as { prompt: string };
 
         const p = prompt.trim();
         if (!p) throw new Error('prompt vacío');
 
-        const videoUrl = await kieGenerateVideoUrl(p);
+        const result = await kieGenerateVideoUrl(p);
+
+        if (result.startsWith('KIE_PENDING:')) {
+            const taskId = result.slice('KIE_PENDING:'.length);
+            return [
+                '⏳ El video está tardando más de 2 minutos en generarse en Kie.ai.',
+                `TaskId: ${taskId}`,
+                '',
+                'Puedes revisar el resultado en https://kie.ai → Logs → Veo y luego pedirme que proponga ese video a TikTok con la URL que aparezca ahí.',
+            ].join('\n');
+        }
 
         return [
             '🎬 Video generado con Kie.ai Veo 3.1.',
-            `🔗 ${videoUrl}`,
+            `🔗 ${result}`,
             '',
             'Puedes usar esta URL en tiktok_propose_video para proponer el video a TikTok.',
         ].join('\n');
