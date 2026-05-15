@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
+import { initMemory } from '../../../../core/memory';
 import { consumePendingVideo } from '../../../../integrations/kie/pending-videos';
 import { insertPending } from '../../../../integrations/tiktok/pending-posts';
 import { sendTelegramChatMessage } from '../../../../integrations/telegram/send-message';
@@ -7,9 +8,8 @@ import { logger } from '../../../../core/logger';
 
 function verifyKieSignature(body: string, req: NextRequest): boolean {
     const hmacKey = process.env.KIE_WEBHOOK_HMAC_KEY?.trim();
-    if (!hmacKey) return true; // sin clave configurada → skip verificación
+    if (!hmacKey) return true;
 
-    // Kie puede usar cualquiera de estos headers
     const sig =
         req.headers.get('x-kie-signature') ??
         req.headers.get('x-hmac-signature') ??
@@ -17,28 +17,54 @@ function verifyKieSignature(body: string, req: NextRequest): boolean {
 
     if (!sig) {
         logger.warn('[KIE-CALLBACK] sin header de firma — aceptando igual');
-        return true; // cabecera aún desconocida; no bloqueamos
+        return true;
     }
 
     const expected = createHmac('sha256', hmacKey).update(body).digest('hex');
     return sig === expected;
 }
 
-function extractVideoUrl(body: Record<string, unknown>): string | undefined {
-    // Intentar varios formatos de respuesta de Kie
-    const resultJson = (body.resultJson ?? (body.data as Record<string, unknown>)?.resultJson) as string | undefined;
-    if (resultJson) {
+type KieCallbackData = {
+    taskId?: string;
+    state?: string;
+    resultJson?: string;
+    info?: {
+        resultUrls?: string[];
+        result_urls?: string[];
+        originUrls?: string[];
+    };
+};
+
+function extractTaskId(body: Record<string, unknown>, data: KieCallbackData): string | undefined {
+    // 1. Campo directo
+    if (body.taskId) return body.taskId as string;
+    if (data.taskId) return data.taskId;
+
+    // 2. Extraer del nombre de archivo en originUrls (patrón: /{taskId}_{ts}.mp4)
+    const originUrl = data.info?.originUrls?.[0];
+    if (originUrl) {
+        const m = originUrl.match(/\/([a-f0-9]{32})_\d+\.mp4/i);
+        if (m) return m[1];
+    }
+
+    return undefined;
+}
+
+function extractVideoUrl(data: KieCallbackData): string | undefined {
+    // resultUrls / result_urls dentro de info
+    const url = data.info?.resultUrls?.[0] ?? data.info?.result_urls?.[0];
+    if (url) return url;
+
+    // resultJson legacy (imágenes)
+    if (data.resultJson) {
         try {
-            const parsed = JSON.parse(resultJson);
+            const parsed = JSON.parse(data.resultJson);
             if (Array.isArray(parsed)) return parsed[0] as string;
             return (parsed as { resultUrls?: string[] }).resultUrls?.[0];
-        } catch { /* continuar */ }
+        } catch { /* ignorar */ }
     }
-    return (
-        body.videoUrl ??
-        body.url ??
-        (body.data as Record<string, unknown>)?.videoUrl
-    ) as string | undefined;
+
+    return undefined;
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -56,16 +82,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ ok: false, error: 'invalid json' }, { status: 400 });
     }
 
-    logger.info(`[KIE-CALLBACK] ${JSON.stringify(body).slice(0, 600)}`);
+    logger.info(`[KIE-CALLBACK] ${rawBody.slice(0, 600)}`);
 
-    const taskId = (
-        body.taskId ??
-        body.task_id ??
-        (body.data as Record<string, unknown>)?.taskId
-    ) as string | undefined;
+    // Inicializar memory (Next.js no llama initMemory automáticamente)
+    await initMemory();
+
+    const data = (body.data ?? {}) as KieCallbackData;
+    const taskId = extractTaskId(body, data);
 
     if (!taskId) {
-        logger.warn('[KIE-CALLBACK] sin taskId en el body');
+        logger.warn('[KIE-CALLBACK] no se pudo extraer taskId');
         return NextResponse.json({ ok: true });
     }
 
@@ -75,45 +101,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ ok: true });
     }
 
-    const state = (
-        body.state ??
-        body.status ??
-        (body.data as Record<string, unknown>)?.state
-    ) as string | undefined;
+    const code = body.code as number | undefined;
+    const videoUrl = extractVideoUrl(data);
 
-    if (state === 'success' || state === 'Success') {
-        const videoUrl = extractVideoUrl(body);
-
-        if (videoUrl) {
-            try {
-                const id = await insertPending(
-                    pending.chatId,
-                    videoUrl,
-                    pending.caption,
-                    pending.privacy as 'PUBLIC_TO_EVERYONE'
-                );
-                await sendTelegramChatMessage(
-                    pending.chatId,
-                    `🎬 ¡Video listo! Propuesto para TikTok — ID: ${id}\n🔗 ${videoUrl}\n\nPara publicar: /tt_approve ${id}\nPara cancelar: /tt_reject ${id}`,
-                    false
-                );
-            } catch (err) {
-                logger.error(`[KIE-CALLBACK] error al proponer TikTok: ${err}`);
-                await sendTelegramChatMessage(
-                    pending.chatId,
-                    `🎬 Video generado: ${videoUrl}\n\nDime "súbelo a TikTok" para publicarlo.`
-                );
-            }
-        } else {
+    // code 200 + resultUrls = éxito
+    if (code === 200 && videoUrl) {
+        try {
+            const id = await insertPending(
+                pending.chatId,
+                videoUrl,
+                pending.caption,
+                pending.privacy as 'PUBLIC_TO_EVERYONE'
+            );
             await sendTelegramChatMessage(
                 pending.chatId,
-                '⚠️ Video generado pero Kie no envió la URL. Revisa kie.ai → Logs → Veo y copia el enlace manualmente.'
+                `🎬 ¡Video listo! Propuesto para TikTok — ID: ${id}\n🔗 ${videoUrl}\n\nPara publicar: /tt_approve ${id}\nPara cancelar: /tt_reject ${id}`,
+                false
+            );
+        } catch (err) {
+            logger.error(`[KIE-CALLBACK] error al proponer TikTok: ${err}`);
+            await sendTelegramChatMessage(
+                pending.chatId,
+                `🎬 Video generado: ${videoUrl}\n\nDime "súbelo a TikTok" para publicarlo.`
             );
         }
     } else {
+        const state = data.state ?? (code !== 200 ? `error code ${code}` : 'desconocido');
         await sendTelegramChatMessage(
             pending.chatId,
-            `❌ La generación del video falló en Kie.ai (estado: ${state ?? 'desconocido'}). Inténtalo de nuevo.`
+            `❌ La generación del video falló en Kie.ai (estado: ${state}). Inténtalo de nuevo.`
         );
     }
 
