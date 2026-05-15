@@ -68,11 +68,11 @@ async function kieGenerateVideoUrl(prompt: string): Promise<string> {
     while (Date.now() - start < maxMs) {
         await sleep(intervalMs);
 
-        const infoRes = await fetch(`${KIE_BASE}/api/v1/veo/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
+        const infoRes = await fetch(`${KIE_BASE}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
             headers: { Authorization: `Bearer ${apiKey}` },
         });
         const infoRaw = await infoRes.text();
-        logger.info(`[KIE-VEO] recordInfo status=${infoRes.status} body=${infoRaw.slice(0, 600)}`);
+        logger.info(`[KIE-VEO] jobs/recordInfo status=${infoRes.status} body=${infoRaw.slice(0, 600)}`);
 
         let infoJson: {
             code?: number;
