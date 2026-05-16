@@ -11,6 +11,7 @@ export type Domain =
     | 'research'     // web search, URLs, prices
     | 'knowledge'    // internal knowledge base CRUD
     | 'memory'       // user profile / remember_about_user
+    | 'notes'        // Obsidian vault notes (read/write/search)
     | 'general';     // ambiguous / cross-domain → expose all tools
 
 // Tools shown exclusively for each domain (augmented with CORE_TOOLS at runtime).
@@ -43,6 +44,10 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
         'google_sheets_quick_note', 'google_sheets_create', 'google_sheets_read', 'google_sheets_write',
         'create_folder', 'write_file', 'read_file', 'list_files', 'append_file',
         'capture_note', 'create_client_workspace',
+        'obsidian_search', 'obsidian_read', 'obsidian_write',
+    ],
+    notes: [
+        'obsidian_search', 'obsidian_read', 'obsidian_write',
     ],
     drive: [
         'drive_create_folder', 'drive_save_important_emails', 'drive_archive_important_emails',
@@ -74,6 +79,8 @@ export const CORE_TOOLS = new Set<string>([
  */
 export function classifyDomain(msg: string): Domain {
     const t = msg.toLowerCase();
+
+    if (/\b(obsidian|vault|nota.*obsidian|obsidian.*nota|busca.*nota|buscar.*nota|crea.*nota|escribe.*nota|actualiza.*nota|nota\s+en\s+obsidian|apunte.*obsidian)\b/.test(t)) return 'notes';
 
     if (/\b(tiktok|tik\s*tok|sube.*video|publica.*video|video.*tiktok|short[s]?|genera.*video.*tiktok|crea.*video.*tiktok)\b/.test(t)) return 'tiktok';
 
