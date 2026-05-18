@@ -66,7 +66,7 @@ export function resolveOpenPath(input: string): string {
 
 export async function openInExplorer(folderPath: string): Promise<void> {
     const normalized = folderPath.replace(/"/g, '');
-    await execAsync(`explorer "${normalized}"`, { shell: true, windowsHide: true });
+    await execAsync(`explorer "${normalized}"`, { windowsHide: true });
 }
 
 const APP_LAUNCH: Record<string, string> = {
