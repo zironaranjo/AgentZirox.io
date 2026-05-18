@@ -35,3 +35,4 @@ import './update-user-context';
 import './tiktok';
 import './generate-video';
 import './obsidian';
+import './desktop';

@@ -48,6 +48,12 @@ RUN npx tsup \
     src/tools/update-user-context.ts \
     src/tools/generate-video.ts \
     src/tools/obsidian.ts \
+    src/tools/desktop/index.ts \
+    src/tools/desktop/desktop-utils.ts \
+    src/tools/desktop/play-youtube.ts \
+    src/tools/desktop/open-application.ts \
+    src/tools/desktop/open-folder.ts \
+    src/tools/desktop/system-control.ts \
     src/integrations/kie/pending-videos.ts \
     src/integrations/tiktok/pending-posts.ts \
     src/core/embeddings.ts \
