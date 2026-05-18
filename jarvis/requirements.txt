@@ -1,0 +1,7 @@
+sounddevice
+scipy
+numpy
+groq
+requests
+pyttsx3
+python-dotenv
