@@ -5,3 +5,4 @@ groq
 requests
 pyttsx3
 python-dotenv
+Pillow

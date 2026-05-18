@@ -15,11 +15,14 @@ if sys.stdout.encoding != 'utf-8':
 if sys.stderr.encoding != 'utf-8':
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
+import base64
+import io
 import numpy as np
 import sounddevice as sd
 import scipy.io.wavfile as wavfile
 import requests
 import pyttsx3
+from PIL import ImageGrab
 from groq import Groq
 from dotenv import load_dotenv
 
@@ -32,6 +35,10 @@ API_SECRET        = os.getenv('WEB_API_SECRET', '')
 CHAT_ID           = 'jarvis'
 
 WAKE_WORDS        = ['zirox', 'ziro', 'despierta zirox', 'despierta']
+VISION_KEYWORDS   = ['qué ves', 'que ves', 'mira la pantalla', 'qué hay en mi pantalla',
+                     'que hay en mi pantalla', 'analiza pantalla', 'qué tengo abierto',
+                     'que tengo abierto', 'mira esto', 'qué estoy viendo', 'que estoy viendo']
+VISION_MODEL      = 'meta-llama/llama-4-scout-17b-16e-instruct'
 SAMPLE_RATE       = 16_000
 CHANNELS          = 1
 WAKE_CHUNK_SECS   = 2.5      # duración de cada chunk de escucha pasiva
@@ -134,6 +141,38 @@ def clean_for_tts(text: str) -> str:
     text = re.sub(r'[^\w\s.,!?áéíóúüñÁÉÍÓÚÜÑ:()\-\'\"]+', ' ', text)
     return ' '.join(text.split())[:700]
 
+# ── Visión de pantalla ────────────────────────────────────────────────────────
+def is_vision_command(text: str) -> bool:
+    t = text.lower()
+    return any(k in t for k in VISION_KEYWORDS)
+
+def screenshot_base64() -> str:
+    img = ImageGrab.grab()
+    img = img.resize((1280, 720))
+    buf = io.BytesIO()
+    img.save(buf, format='JPEG', quality=70)
+    return base64.b64encode(buf.getvalue()).decode()
+
+def ask_vision(question: str) -> str:
+    print('📸  Capturando pantalla...')
+    try:
+        img_b64 = screenshot_base64()
+        prompt = question if question else '¿Qué ves en esta pantalla? Responde en español de forma concisa.'
+        response = groq_client.chat.completions.create(
+            model=VISION_MODEL,
+            messages=[{
+                'role': 'user',
+                'content': [
+                    {'type': 'image_url', 'image_url': {'url': f'data:image/jpeg;base64,{img_b64}'}},
+                    {'type': 'text', 'text': prompt},
+                ],
+            }],
+            max_tokens=400,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f'No pude analizar la pantalla: {e}'
+
 # ── Wake word ─────────────────────────────────────────────────────────────────
 def find_wake_word(text: str) -> tuple[bool, str]:
     lower = text.lower()
@@ -203,9 +242,14 @@ def run():
             continue
 
         print(f'📝  Comando: {command}')
-        speak('Un momento.')
 
-        reply = ask_agent(command)
+        if is_vision_command(command):
+            speak('Mirando tu pantalla.')
+            reply = ask_vision(command)
+        else:
+            speak('Un momento.')
+            reply = ask_agent(command)
+
         print(f'🤖  {reply[:200]}')
 
         speak(clean_for_tts(reply))
