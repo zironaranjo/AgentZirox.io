@@ -41,8 +41,8 @@ AGENT_URL         = os.getenv('JARVIS_AGENT_URL', 'http://localhost:3000/api/cha
 API_SECRET        = os.getenv('WEB_API_SECRET', '')
 CHAT_ID           = 'jarvis'
 
-STOP_WORDS        = {'para', 'detente', 'calla', 'callate', 'silencio', 'stop',
-                     'basta', 'suficiente', 'cancela', 'cancel'}
+STOP_WORDS        = {'detente', 'calla', 'callate', 'silencio', 'stop',
+                     'basta', 'suficiente', 'cancela', 'cancel', 'para ya'}
 
 WAKE_WORDS        = {'zirox', 'ziro', 'sirox', 'cirox', 'silox', 'sirop', 'xirox',
                      'zirop', 'siroc', 'zerox', 'serrox', 'serox', 'silos', 'silas',
@@ -61,7 +61,7 @@ VISION_MODEL      = 'meta-llama/llama-4-scout-17b-16e-instruct'
 SAMPLE_RATE       = 16_000
 CHANNELS          = 1
 WAKE_CHUNK_SECS   = 2.5      # duración de cada chunk de escucha pasiva
-ENERGY_THRESHOLD  = 0.015    # RMS normalizado — ajustar si hay falsos positivos
+ENERGY_THRESHOLD  = 0.025    # RMS normalizado — subido para filtrar conversación de fondo
 SILENCE_SECS      = 1.8      # segundos de silencio para cortar el comando
 MAX_CMD_SECS      = 12       # duración máxima de un comando
 
