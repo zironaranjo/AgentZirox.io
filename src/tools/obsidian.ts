@@ -46,7 +46,9 @@ registerTool({
         const cap = Math.min(Number(limit) || 5, 10);
 
         const url = `${GH_BASE}/search/code?q=${encodeURIComponent(query)}+repo:${repo}&per_page=${cap}`;
-        const res = await fetch(url, { headers: ghHeaders(token) });
+        const res = await fetch(url, {
+            headers: { ...ghHeaders(token), Accept: 'application/vnd.github.text-match+json' },
+        });
 
         if (res.status === 403) {
             const msg = await res.text();

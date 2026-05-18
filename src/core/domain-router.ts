@@ -2,6 +2,7 @@
 // Reduces hallucination and speeds up responses vs exposing 35+ tools unconditionally.
 
 export type Domain =
+    | 'desktop'      // PC local: apps, carpetas, YouTube play, volumen
     | 'media'        // image generation/storage, TTS, YouTube
     | 'comms'        // email, WhatsApp
     | 'linkedin'     // social media drafts & posting
@@ -17,12 +18,20 @@ export type Domain =
 // Tools shown exclusively for each domain (augmented with CORE_TOOLS at runtime).
 // 'general' is empty by convention — the caller exposes all tools when empty.
 export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
+    desktop: [
+        'play_youtube',
+        'open_application',
+        'open_folder',
+        'system_control',
+        'youtube_transcript',
+    ],
     media: [
         'generate_image',
         'generate_video',
         'save_image', 'list_images', 'delete_image', 'get_saved_image',
         'tts_generate',
         'youtube_transcript',
+        'play_youtube',
     ],
     comms: [
         'send_email', 'read_inbox',
@@ -80,11 +89,18 @@ export const CORE_TOOLS = new Set<string>([
 export function classifyDomain(msg: string): Domain {
     const t = msg.toLowerCase();
 
-    if (/\b(obsidian|vault|nota.*obsidian|obsidian.*nota|busca.*nota|buscar.*nota|crea.*nota|escribe.*nota|actualiza.*nota|nota\s+en\s+obsidian|apunte.*obsidian)\b/.test(t)) return 'notes';
+    if (/\b(obsidian|vault|nota.*obsidian|obsidian.*nota|busca.*nota|buscar.*nota|crea.*nota|escribe.*nota|actualiza.*nota|lee.*nota|leer.*nota|muestra.*nota|abre.*nota|nota\s+en\s+obsidian|apunte.*obsidian)\b/.test(t)) return 'notes';
 
     if (/\b(tiktok|tik\s*tok|sube.*video|publica.*video|video.*tiktok|short[s]?|genera.*video.*tiktok|crea.*video.*tiktok)\b/.test(t)) return 'tiktok';
 
     if (/\b(linkedin|post de linkedin|publicaci[oó]n|draft|borrador|redacta.*post|escribir.*post|crea.*post|haz.*post|escrib[ei].*post|\bpost\s+(sobre|de|con|para|acerca|en linkedin))\b/.test(t)) return 'linkedin';
+
+    if (
+        /\b(abre|abrir|lanza|inicia|pon|ponme|reproduce|reproducir|ejecuta)\s+(la\s+)?(carpeta|app|aplicaci[oó]n|programa|spotify|chrome|explorador|notepad|calculadora)\b/.test(t) ||
+        /\b(carpeta|explorador\s+de\s+archivos|escritorio|documentos|descargas)\b/.test(t) && /\b(abre|abrir|muestra|mu[eé]strame|ve\s+a|ir\s+a)\b/.test(t) ||
+        /\b(sube|baja|silencia|mute|volumen|más\s+alto|más\s+bajo)\b/.test(t) && /\b(volumen|sonido|audio)\b/.test(t) ||
+        /\b(pon|ponme|reproduce|reproducir|escuchar)\b/.test(t) && /\b(canci[oó]n|m[uú]sica|youtube|spotify)\b/.test(t)
+    ) return 'desktop';
 
     if (/\b(imagen|foto|genera|genera[r]|diseña|ilustr|dall.e|stable.diffusion|midjourney|audio|voz|tts|generar\s+voz|generar?\s+video|crea[r]?\s+video|video.*veo|veo\s*3|youtube\.com|youtu\.be|transcripci[oó]n)\b/.test(t)) return 'media';
 
