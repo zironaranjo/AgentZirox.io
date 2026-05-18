@@ -21,6 +21,7 @@ import ctypes
 import io
 import subprocess
 import tempfile
+import threading
 import time
 from difflib import SequenceMatcher
 import edge_tts
@@ -39,6 +40,9 @@ GROQ_API_KEY      = os.getenv('GROQ_API_KEY', '')
 AGENT_URL         = os.getenv('JARVIS_AGENT_URL', 'http://localhost:3000/api/chat')
 API_SECRET        = os.getenv('WEB_API_SECRET', '')
 CHAT_ID           = 'jarvis'
+
+STOP_WORDS        = {'para', 'detente', 'calla', 'callate', 'silencio', 'stop',
+                     'basta', 'suficiente', 'cancela', 'cancel'}
 
 WAKE_WORDS        = {'zirox', 'ziro', 'sirox', 'cirox', 'silox', 'sirop', 'xirox',
                      'zirop', 'siroc', 'zerox', 'serrox', 'serox', 'silos', 'silas',
@@ -62,12 +66,22 @@ SILENCE_SECS      = 1.8      # segundos de silencio para cortar el comando
 MAX_CMD_SECS      = 12       # duración máxima de un comando
 
 # ── TTS ───────────────────────────────────────────────────────────────────────
-VOICE = os.getenv('JARVIS_VOICE', 'es-US-AlonsoNeural')
-_wm   = ctypes.windll.winmm
+VOICE      = os.getenv('JARVIS_VOICE', 'es-US-AlonsoNeural')
+_wm        = ctypes.windll.winmm
+_speak_stop = threading.Event()
+
+def stop_speaking() -> None:
+    _speak_stop.set()
+
+def is_stop_command(text: str) -> bool:
+    words = {w.strip('.,!?¡¿') for w in text.lower().split()}
+    return bool(words & STOP_WORDS)
 
 def speak(text: str) -> None:
     print(f'🔊 {text}')
+    _speak_stop.clear()
     safe = text.replace('\n', ' ')[:600]
+    alias = f'mp3_{int(time.time()*1000)}'
 
     async def _gen(path: str) -> None:
         await edge_tts.Communicate(safe, VOICE, rate='+10%').save(path)
@@ -75,9 +89,16 @@ def speak(text: str) -> None:
     path = tempfile.mktemp(suffix='.mp3')
     try:
         asyncio.run(_gen(path))
-        _wm.mciSendStringW(f'open "{path}" type mpegvideo alias mp3', None, 0, None)
-        _wm.mciSendStringW('play mp3 wait', None, 0, None)
-        _wm.mciSendStringW('close mp3', None, 0, None)
+        _wm.mciSendStringW(f'open "{path}" type mpegvideo alias {alias}', None, 0, None)
+        _wm.mciSendStringW(f'play {alias}', None, 0, None)  # no-wait — polling loop
+        buf = ctypes.create_unicode_buffer(128)
+        while not _speak_stop.is_set():
+            _wm.mciSendStringW(f'status {alias} mode', buf, 128, None)
+            if buf.value != 'playing':
+                break
+            time.sleep(0.05)
+        _wm.mciSendStringW(f'stop {alias}', None, 0, None)
+        _wm.mciSendStringW(f'close {alias}', None, 0, None)
     except Exception as e:
         print(f'[tts error] {e}')
     finally:
@@ -256,6 +277,12 @@ def conversation_mode() -> None:
 
         if not command or len(command) < 2:
             continue
+
+        if is_stop_command(command):
+            stop_speaking()
+            print('🛑  Comando de parada.')
+            speak('De acuerdo.')
+            return
 
         process_command(command)
 
