@@ -219,6 +219,48 @@ def find_wake_word(text: str) -> tuple[bool, str]:
             return True, command
     return False, ''
 
+CONV_TIMEOUT_SECS  = 12   # segundos de silencio para volver a modo pasivo
+CONV_CHUNK_SECS    = 1.0  # chunks cortos para reaccionar rápido en conversación
+
+# ── Procesador de comando (compartido por wake word y conversación) ────────────
+def process_command(command: str) -> None:
+    print(f'📝  Comando: {command}')
+    if is_vision_command(command):
+        speak('Mirando tu pantalla.')
+        reply = ask_vision(command)
+    else:
+        speak('Un momento.')
+        reply = ask_agent(command)
+    print(f'🤖  {reply[:200]}')
+    speak(clean_for_tts(reply))
+
+# ── Modo conversación ─────────────────────────────────────────────────────────
+def conversation_mode() -> None:
+    print('💬  Modo conversación — escuchando seguimiento...')
+    silent_secs = 0.0
+
+    while silent_secs < CONV_TIMEOUT_SECS:
+        chunk = record_chunk(CONV_CHUNK_SECS)
+        if rms(chunk) < ENERGY_THRESHOLD:
+            silent_secs += CONV_CHUNK_SECS
+            continue
+
+        silent_secs = 0.0
+        rest = record_until_silence()
+        full_audio = np.concatenate([chunk, rest], axis=0)
+        try:
+            command = transcribe(full_audio)
+        except Exception as e:
+            print(f'[transcribe error] {e}')
+            continue
+
+        if not command or len(command) < 2:
+            continue
+
+        process_command(command)
+
+    print('💬  Silencio — volviendo a modo pasivo.')
+
 # ── Bucle principal ───────────────────────────────────────────────────────────
 def run():
     if not GROQ_API_KEY:
@@ -229,22 +271,19 @@ def run():
     print('╔══════════════════════════════════════╗')
     print('║   Jarvis · AgentZirox  — modo local  ║')
     print('╠══════════════════════════════════════╣')
-    print('║  Di «Zirox» para activar             ║')
+    print('║  Di «Jarvis» para activar            ║')
     print('║  Ctrl+C para salir                   ║')
     print('╚══════════════════════════════════════╝')
     print()
 
-    speak('Jarvis activo. Di Zirox para activarme.')
+    speak('Jarvis activo. Di Jarvis para activarme.')
 
     while True:
         # ── Escucha pasiva ────────────────────────────────────────────────────
         chunk = record_chunk(WAKE_CHUNK_SECS)
-        energy = rms(chunk)
+        if rms(chunk) < ENERGY_THRESHOLD:
+            continue
 
-        if energy < ENERGY_THRESHOLD:
-            continue  # silencio — no gastar API
-
-        # Hay voz — transcribir para detectar wake word
         try:
             text = transcribe(chunk)
         except Exception as e:
@@ -256,7 +295,6 @@ def run():
 
         print(f'👂  {text}')
         found, command = find_wake_word(text)
-
         if not found:
             continue
 
@@ -265,7 +303,7 @@ def run():
 
         if not command:
             speak('Dime')
-            time.sleep(0.6)  # dejar que el eco del TTS se disipe
+            time.sleep(0.6)
             audio = record_until_silence()
             try:
                 command = transcribe(audio)
@@ -278,18 +316,8 @@ def run():
             speak('No escuché ningún comando.')
             continue
 
-        print(f'📝  Comando: {command}')
-
-        if is_vision_command(command):
-            speak('Mirando tu pantalla.')
-            reply = ask_vision(command)
-        else:
-            speak('Un momento.')
-            reply = ask_agent(command)
-
-        print(f'🤖  {reply[:200]}')
-
-        speak(clean_for_tts(reply))
+        process_command(command)
+        conversation_mode()
 
 if __name__ == '__main__':
     try:
