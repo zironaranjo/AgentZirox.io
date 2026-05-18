@@ -167,7 +167,17 @@ def record_until_silence() -> np.ndarray:
 # ── Transcripción ─────────────────────────────────────────────────────────────
 groq_client = Groq(api_key=GROQ_API_KEY)
 
+WHISPER_PROMPT = (
+    'Jarvis, Zirox, AgentZirox, pantalla, captura, screenshot, volumen, Spotify, '
+    'YouTube, abre, carpeta, documentos, escritorio, descargas, para, calla, silencio, '
+    'qué ves, mira esto, qué hay, qué tengo abierto, un momento, dime'
+)
+MIN_AUDIO_SECS = 0.4  # descartar audios más cortos (ruido)
+
 def transcribe(audio: np.ndarray) -> str:
+    duration = len(audio) / SAMPLE_RATE
+    if duration < MIN_AUDIO_SECS:
+        return ''
     with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
         wavfile.write(f.name, SAMPLE_RATE, audio)
         path = f.name
@@ -177,6 +187,7 @@ def transcribe(audio: np.ndarray) -> str:
                 model='whisper-large-v3-turbo',
                 file=('audio.wav', f, 'audio/wav'),
                 language='es',
+                prompt=WHISPER_PROMPT,
             )
         return result.text.strip()
     finally:
