@@ -6,3 +6,4 @@ requests
 pyttsx3
 python-dotenv
 Pillow
+edge-tts

@@ -15,13 +15,18 @@ if sys.stdout.encoding != 'utf-8':
 if sys.stderr.encoding != 'utf-8':
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
+import asyncio
 import base64
+import ctypes
 import io
+import subprocess
+import tempfile
+from difflib import SequenceMatcher
+import edge_tts
 import numpy as np
 import sounddevice as sd
 import scipy.io.wavfile as wavfile
 import requests
-import pyttsx3
 from PIL import ImageGrab
 from groq import Groq
 from dotenv import load_dotenv
@@ -34,7 +39,9 @@ AGENT_URL         = os.getenv('JARVIS_AGENT_URL', 'http://localhost:3000/api/cha
 API_SECRET        = os.getenv('WEB_API_SECRET', '')
 CHAT_ID           = 'jarvis'
 
-WAKE_WORDS        = ['zirox', 'ziro', 'despierta zirox', 'despierta']
+WAKE_WORDS        = {'zirox', 'ziro', 'sirox', 'cirox', 'silox', 'sirop', 'xirox',
+                     'zirop', 'siroc', 'zerox', 'serrox', 'serox', 'silos', 'silas',
+                     'siros', 'sioxx', 'jarvis', 'despierta'}
 VISION_KEYWORDS   = ['qué ves', 'que ves', 'mira la pantalla', 'qué hay en mi pantalla',
                      'que hay en mi pantalla', 'analiza pantalla', 'qué tengo abierto',
                      'que tengo abierto', 'mira esto', 'qué estoy viendo', 'que estoy viendo']
@@ -47,20 +54,29 @@ SILENCE_SECS      = 1.8      # segundos de silencio para cortar el comando
 MAX_CMD_SECS      = 12       # duración máxima de un comando
 
 # ── TTS ───────────────────────────────────────────────────────────────────────
-tts = pyttsx3.init()
-tts.setProperty('rate', 160)
-
-for voice in tts.getProperty('voices'):
-    name = voice.name.lower()
-    vid  = voice.id.lower()
-    if any(k in name or k in vid for k in ('sabina', 'helena', 'spanish', 'es_', 'es-')):
-        tts.setProperty('voice', voice.id)
-        break
+VOICE = os.getenv('JARVIS_VOICE', 'es-US-AlonsoNeural')
+_wm   = ctypes.windll.winmm
 
 def speak(text: str) -> None:
     print(f'🔊 {text}')
-    tts.say(text)
-    tts.runAndWait()
+    safe = text.replace('\n', ' ')[:600]
+
+    async def _gen(path: str) -> None:
+        await edge_tts.Communicate(safe, VOICE, rate='+10%').save(path)
+
+    path = tempfile.mktemp(suffix='.mp3')
+    try:
+        asyncio.run(_gen(path))
+        _wm.mciSendStringW(f'open "{path}" type mpegvideo alias mp3', None, 0, None)
+        _wm.mciSendStringW('play mp3 wait', None, 0, None)
+        _wm.mciSendStringW('close mp3', None, 0, None)
+    except Exception as e:
+        print(f'[tts error] {e}')
+    finally:
+        try:
+            os.unlink(path)
+        except Exception:
+            pass
 
 # ── Audio helpers ─────────────────────────────────────────────────────────────
 def rms(audio: np.ndarray) -> float:
@@ -174,12 +190,19 @@ def ask_vision(question: str) -> str:
         return f'No pude analizar la pantalla: {e}'
 
 # ── Wake word ─────────────────────────────────────────────────────────────────
+def _like_zirox(word: str) -> bool:
+    w = word.lower().strip('.,!?¡¿:;"\'-')
+    if w in WAKE_WORDS:
+        return True
+    if len(w) >= 4:
+        return SequenceMatcher(None, w, 'zirox').ratio() >= 0.7
+    return False
+
 def find_wake_word(text: str) -> tuple[bool, str]:
-    lower = text.lower()
-    for word in WAKE_WORDS:
-        idx = lower.find(word)
-        if idx != -1:
-            command = text[idx + len(word):].strip(' ,.-!¡¿?')
+    words = text.split()
+    for i, w in enumerate(words):
+        if _like_zirox(w):
+            command = ' '.join(words[i + 1:]).strip(' ,.-!¡¿?')
             return True, command
     return False, ''
 
