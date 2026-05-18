@@ -77,6 +77,24 @@ def is_stop_command(text: str) -> bool:
     words = {w.strip('.,!?¡¿') for w in text.lower().split()}
     return bool(words & STOP_WORDS)
 
+def _stop_listener() -> None:
+    """Hilo: escucha 'calla/para/stop' mientras el TTS está reproduciendo."""
+    chunk_samp = int(SAMPLE_RATE * 0.8)
+    while not _speak_stop.is_set():
+        try:
+            data = sd.rec(chunk_samp, samplerate=SAMPLE_RATE, channels=CHANNELS, dtype='int16')
+            sd.wait()
+            if _speak_stop.is_set():
+                break
+            if rms(data) < ENERGY_THRESHOLD:
+                continue
+            text = transcribe(data)
+            if text and is_stop_command(text):
+                print(f'🛑  [{text}] → parando')
+                _speak_stop.set()
+        except Exception:
+            break
+
 def speak(text: str) -> None:
     print(f'🔊 {text}')
     _speak_stop.clear()
@@ -90,15 +108,22 @@ def speak(text: str) -> None:
     try:
         asyncio.run(_gen(path))
         _wm.mciSendStringW(f'open "{path}" type mpegvideo alias {alias}', None, 0, None)
-        _wm.mciSendStringW(f'play {alias}', None, 0, None)  # no-wait — polling loop
+        _wm.mciSendStringW(f'play {alias}', None, 0, None)
+
+        listener = threading.Thread(target=_stop_listener, daemon=True)
+        listener.start()
+
         buf = ctypes.create_unicode_buffer(128)
         while not _speak_stop.is_set():
             _wm.mciSendStringW(f'status {alias} mode', buf, 128, None)
             if buf.value != 'playing':
                 break
             time.sleep(0.05)
+
         _wm.mciSendStringW(f'stop {alias}', None, 0, None)
         _wm.mciSendStringW(f'close {alias}', None, 0, None)
+        _speak_stop.set()  # señal al listener para que salga
+        listener.join(timeout=2.0)
     except Exception as e:
         print(f'[tts error] {e}')
     finally:
