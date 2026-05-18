@@ -8,6 +8,13 @@ import os
 import sys
 import re
 import tempfile
+
+# Fix Windows console encoding for unicode/emoji
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 import numpy as np
 import sounddevice as sd
 import scipy.io.wavfile as wavfile
