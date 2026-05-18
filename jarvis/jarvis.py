@@ -21,6 +21,7 @@ import ctypes
 import io
 import subprocess
 import tempfile
+import time
 from difflib import SequenceMatcher
 import edge_tts
 import numpy as np
@@ -42,9 +43,16 @@ CHAT_ID           = 'jarvis'
 WAKE_WORDS        = {'zirox', 'ziro', 'sirox', 'cirox', 'silox', 'sirop', 'xirox',
                      'zirop', 'siroc', 'zerox', 'serrox', 'serox', 'silos', 'silas',
                      'siros', 'sioxx', 'jarvis', 'despierta'}
-VISION_KEYWORDS   = ['qué ves', 'que ves', 'mira la pantalla', 'qué hay en mi pantalla',
-                     'que hay en mi pantalla', 'analiza pantalla', 'qué tengo abierto',
-                     'que tengo abierto', 'mira esto', 'qué estoy viendo', 'que estoy viendo']
+VISION_KEYWORDS   = ['qué ves', 'que ves', 'mira la pantalla', 'mira esto',
+                     'qué hay en mi pantalla', 'que hay en mi pantalla',
+                     'qué está en mi pantalla', 'que esta en mi pantalla',
+                     'que esta es mi pantalla', 'dime que esta', 'dime qué esta',
+                     'analiza pantalla', 'analiza la pantalla',
+                     'qué tengo abierto', 'que tengo abierto',
+                     'qué estoy viendo', 'que estoy viendo',
+                     'qué se ve', 'que se ve', 'qué hay en pantalla',
+                     'pantalla', 'captura', 'screenshot', 'foto pantalla',
+                     'que ves ahora', 'qué ves ahora', 'describe lo que ves']
 VISION_MODEL      = 'meta-llama/llama-4-scout-17b-16e-instruct'
 SAMPLE_RATE       = 16_000
 CHANNELS          = 1
@@ -173,7 +181,12 @@ def ask_vision(question: str) -> str:
     print('📸  Capturando pantalla...')
     try:
         img_b64 = screenshot_base64()
-        prompt = question if question else '¿Qué ves en esta pantalla? Responde en español de forma concisa.'
+        base_prompt = (
+            'Responde SIEMPRE en español. '
+            'Describe brevemente lo que ves en esta pantalla en 2-3 frases máximo. '
+            'Sé directo y conciso.'
+        )
+        prompt = f'{base_prompt} El usuario pregunta: {question}' if question else base_prompt
         response = groq_client.chat.completions.create(
             model=VISION_MODEL,
             messages=[{
@@ -183,7 +196,7 @@ def ask_vision(question: str) -> str:
                     {'type': 'text', 'text': prompt},
                 ],
             }],
-            max_tokens=400,
+            max_tokens=200,
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -252,6 +265,7 @@ def run():
 
         if not command:
             speak('Dime')
+            time.sleep(0.6)  # dejar que el eco del TTS se disipe
             audio = record_until_silence()
             try:
                 command = transcribe(audio)
