@@ -5,13 +5,13 @@ import { logger } from '../../../core/logger';
 
 const TRUSTED_ORIGINS = ['https://triadak.io', 'https://www.triadak.io'];
 
-function corsHeaders(origin: string) {
-    const allowed = TRUSTED_ORIGINS.includes(origin) ? origin : '';
-    return allowed ? {
-        'Access-Control-Allow-Origin': allowed,
+function corsHeaders(origin: string): Record<string, string> {
+    if (!TRUSTED_ORIGINS.includes(origin)) return {};
+    return {
+        'Access-Control-Allow-Origin': origin,
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, x-api-secret',
-    } : {};
+    };
 }
 
 export async function OPTIONS(req: Request) {
