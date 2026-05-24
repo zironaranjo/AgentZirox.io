@@ -17,7 +17,7 @@ function parseRunAtMs(runAtIso: string): number {
 registerTool({
     name: 'schedule_task',
     description:
-        'Programa una acción futura en ESTE chat (Telegram o WhatsApp). OBLIGATORIO si el usuario pide un recordatorio, aviso o tarea a una hora/fecha concreta (mañana a las 8, en 30 minutos, etc.). Sin llamar a esta tool, nada se ejecutará solo: no basta con prometerlo en texto. Calcula run_at_iso en Europa/Madrid con offset correcto (+01:00 o +02:00 según DST).',
+        'Programa una acción futura en ESTE chat (Telegram o WhatsApp). OBLIGATORIO si el usuario pide recordatorio/aviso con hora o fecha ("recuérdame mañana a las 7", "apúntame revisar X mañana a las 9"). Sin esta tool nada se ejecutará solo. Calcula run_at_iso en Europa/Madrid (+01:00 o +02:00 según DST).',
     parameters: {
         type: 'object',
         properties: {

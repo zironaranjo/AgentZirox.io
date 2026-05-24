@@ -5,6 +5,7 @@ import { logger } from './logger';
 import { runWithToolContext } from './tool-context';
 import { routeIntent } from './intent-router';
 import { classifyDomain, getDomainToolSet } from './domain-router';
+import { detectTaskHallucination, requiresTaskAction, taskActionRetryHint } from './task-intent';
 
 // Bootstrap all tools on first import
 import '../tools/index';
@@ -37,10 +38,17 @@ const ACTION_PHRASES = [
     'url pública', 'url publica', 'storage.googleapis', 'supabase.co/storage',
     // Schedule/reminder claims (only unambiguous hallucination phrases — avoid tool output text)
     'te he recordado', 'ya lo programé', 'ya lo agendé',
+    'ha sido programada', 'ha sido programado', 'está programada', 'esta programada',
+    'ya está programada', 'ya esta programada', 'programada correctamente',
+    'apuntada correctamente', 'mismo id', 'ya existía', 'ya existia',
+    'en mi lista de tareas programadas',
 ];
 
 // Tools whose results must be returned verbatim — LLM rewrite drops critical info (e.g. post ID).
-const DIRECT_RESULT_TOOLS = new Set(['linkedin_propose_post', 'save_image', 'list_images', 'obsidian_read', 'obsidian_search', 'obsidian_write']);
+const DIRECT_RESULT_TOOLS = new Set([
+    'linkedin_propose_post', 'save_image', 'list_images', 'obsidian_read', 'obsidian_search', 'obsidian_write',
+    'schedule_task', 'save_agent_task',
+]);
 
 // After these tools execute, stop the agent loop immediately.
 // linkedin_propose_post: result contains "/li_approve" — triggers hallucination detector → auto-approve.
@@ -155,6 +163,14 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         });
     }
 
+    const taskActionRequired = requiresTaskAction(userMessage);
+    if (taskActionRequired) {
+        conversation.push({
+            role: 'system',
+            content: `[SISTEMA] ${taskActionRetryHint(userMessage)} Responde SOLO llamando la tool; no texto afirmando que ya lo hiciste.`,
+        });
+    }
+
     let response = await callLLM(conversation, tools);
 
     let iterations = 0;
@@ -202,18 +218,20 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
                 const pendingTools = toolNames.filter((n) => !executedToolNames.includes(n));
                 const claimedToolUse =
                     pendingTools.some((name) => content.includes(name)) ||
-                    ACTION_PHRASES.some((phrase) => content.toLowerCase().includes(phrase));
+                    ACTION_PHRASES.some((phrase) => content.toLowerCase().includes(phrase)) ||
+                    detectTaskHallucination(userMessage, content, executedToolNames);
 
                 if (claimedToolUse) {
                     hallucinationRetries++;
                     logger.warn(`[agent] LLM described tool usage without calling it — retry ${hallucinationRetries}/${MAX_HALLUCINATION_RETRIES}`);
+                    const taskHint = requiresTaskAction(userMessage) ? ` ${taskActionRetryHint(userMessage)}` : '';
                     const hint = pendingTools.length > 0
                         ? ` Las herramientas disponibles que AÚN NO has llamado incluyen: ${pendingTools.slice(0, 6).join(', ')}.`
                         : '';
                     conversation.push({ role: 'assistant', content });
                     conversation.push({
                         role: 'user',
-                        content: `SISTEMA: PROHIBIDO describir herramientas en texto. Describiste que usaste una herramienta pero NO la llamaste mediante tool_calls.${hint} DEBES llamarla AHORA usando el mecanismo estructurado de tool_calls. NO escribas más texto explicativo — llama la herramienta directamente.`,
+                        content: `SISTEMA: PROHIBIDO describir herramientas en texto. Describiste que usaste una herramienta pero NO la llamaste mediante tool_calls.${hint}${taskHint} DEBES llamarla AHORA usando el mecanismo estructurado de tool_calls. NO escribas más texto explicativo — llama la herramienta directamente. PROHIBIDO inventar IDs de tareas.`,
                     });
                     response = await callLLM(conversation, tools);
                     continue agentLoop;
