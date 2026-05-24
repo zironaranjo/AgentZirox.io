@@ -49,6 +49,7 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
     ],
     productivity: [
         'schedule_task', 'list_scheduled_tasks', 'cancel_scheduled_task',
+        'save_agent_task', 'list_agent_tasks', 'complete_agent_task', 'cancel_agent_task',
         'google_calendar_list_events', 'google_calendar_create_event',
         'google_sheets_quick_note', 'google_sheets_create', 'google_sheets_read', 'google_sheets_write',
         'create_folder', 'write_file', 'read_file', 'list_files', 'append_file',
@@ -80,6 +81,8 @@ export const CORE_TOOLS = new Set<string>([
     'remember_about_user',
     'update_user_context',
     'list_tools',
+    'save_agent_task',
+    'list_agent_tasks',
 ]);
 
 /**

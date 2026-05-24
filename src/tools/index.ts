@@ -17,6 +17,7 @@ import './create-client-workspace';
 import './capture-note';
 import './remember-user';
 import './schedule-task';
+import './agent-tasks';
 import './drive-create-folder';
 import './drive-save-important-emails';
 import './drive-archive-important-emails';
