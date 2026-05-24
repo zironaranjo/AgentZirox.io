@@ -53,13 +53,18 @@ registerTool({
         }
 
         const id = await insertScheduledTask(ctx.chatId, instruction, runAtMs);
-        const when = new Date(runAtMs).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
+        const when = new Date(runAtMs).toLocaleString('es-ES', {
+            timeZone: 'Europe/Madrid',
+            dateStyle: 'short',
+            timeStyle: 'short',
+        });
+        const summary =
+            instruction.length > 100 ? `${instruction.slice(0, 100)}…` : instruction;
         return [
-            '✅ Tarea programada.',
+            '✅ Recordatorio programado.',
+            `🕐 ${when} (Madrid)`,
+            `📌 ${summary}`,
             `🆔 id: ${id}`,
-            `🕐 Ejecución (Madrid): ${when}`,
-            '',
-            'Asegúrate de que en el servidor estén SCHEDULED_TASKS_ENABLED=true y un cron cada 1–2 min a /api/cron/scheduled-tasks con el mismo secreto que el resto de crons.',
         ].join('\n');
     },
 });
