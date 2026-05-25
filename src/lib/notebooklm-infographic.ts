@@ -1,10 +1,7 @@
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
-import { promisify } from 'node:util';
 
 import { logger } from '../core/logger';
-
-const execFileAsync = promisify(execFile);
 
 export type NotebooklmInfographicInput = {
     title: string;
@@ -45,6 +42,46 @@ export function isNotebooklmEnabled(): boolean {
     return v === 'true' || v === '1' || v === 'yes';
 }
 
+function runPythonScript(jsonInput: string, timeoutMs: number): Promise<{ stdout: string; stderr: string }> {
+    return new Promise((resolve, reject) => {
+        const child = spawn(pythonBin(), [scriptPath()], {
+            env: { ...process.env },
+            stdio: ['pipe', 'pipe', 'pipe'],
+        });
+
+        let stdout = '';
+        let stderr = '';
+        child.stdout.on('data', (chunk: Buffer | string) => {
+            stdout += String(chunk);
+        });
+        child.stderr.on('data', (chunk: Buffer | string) => {
+            stderr += String(chunk);
+        });
+
+        const timer = setTimeout(() => {
+            child.kill('SIGTERM');
+            reject(new Error(`NotebookLM timeout (${timeoutMs}ms)`));
+        }, timeoutMs);
+
+        child.on('error', (err) => {
+            clearTimeout(timer);
+            reject(err);
+        });
+
+        child.on('close', (code) => {
+            clearTimeout(timer);
+            if (code === 0) {
+                resolve({ stdout, stderr });
+                return;
+            }
+            reject(new Error(stderr.trim() || stdout.trim() || `Script NotebookLM exit ${code}`));
+        });
+
+        child.stdin.write(jsonInput);
+        child.stdin.end();
+    });
+}
+
 export async function runNotebooklmInfographic(
     input: NotebooklmInfographicInput
 ): Promise<{ pngBuffer: Buffer; notebookId?: string; taskId?: string }> {
@@ -66,12 +103,7 @@ export async function runNotebooklmInfographic(
 
     logger.info('[notebooklm] Generando infografía (puede tardar varios minutos)…');
 
-    const { stdout, stderr } = await execFileAsync(pythonBin(), [scriptPath()], {
-        input: JSON.stringify(payload),
-        maxBuffer: 64 * 1024 * 1024,
-        timeout: timeoutMs,
-        env: { ...process.env },
-    });
+    const { stdout, stderr } = await runPythonScript(JSON.stringify(payload), timeoutMs);
 
     if (stderr?.trim()) {
         logger.warn('[notebooklm] stderr:', stderr.slice(0, 400));

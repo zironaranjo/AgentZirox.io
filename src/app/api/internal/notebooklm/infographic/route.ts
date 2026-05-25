@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
-import { archiveInfographicToNeurona } from '../../../../lib/infographic-neurona';
-import { runNotebooklmInfographic } from '../../../../lib/notebooklm-infographic';
-import { updateInfographicJobPng, uploadInfographicPng } from '../../../../core/storage';
+import { archiveInfographicToNeurona } from '../../../../../lib/infographic-neurona';
+import { runNotebooklmInfographic } from '../../../../../lib/notebooklm-infographic';
+import { updateInfographicJobPng, uploadInfographicPng } from '../../../../../core/storage';
 
 function extractSecret(req: Request): string | null {
     const auth = req.headers.get('authorization');

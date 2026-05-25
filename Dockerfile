@@ -1,18 +1,22 @@
-FROM node:20-bullseye-slim
+FROM node:20-bookworm-slim
 
 WORKDIR /app
 
-# herramientas de compilación para better-sqlite3
+# herramientas de compilación para better-sqlite3 + Python 3.11 para notebooklm-py
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
+    python3-venv \
     make \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# NotebookLM (opcional): pip install + notebooklm login en volumen ~/.notebooklm
+# NotebookLM: pip install + playwright browser (auth vía volumen /app/.notebooklm)
 COPY scripts/requirements-notebooklm.txt ./scripts/
-RUN pip3 install --no-cache-dir -r scripts/requirements-notebooklm.txt || echo "NotebookLM deps skipped"
+RUN pip3 install --break-system-packages --upgrade pip \
+    && pip3 install --break-system-packages --no-cache-dir -r scripts/requirements-notebooklm.txt \
+    && python3 -m playwright install-deps chromium \
+    && python3 -m playwright install chromium
 
 # dependencias (cacheado mientras package.json no cambie)
 COPY package.json package-lock.json ./
