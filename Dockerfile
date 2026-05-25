@@ -13,6 +13,10 @@ RUN apt-get update && apt-get install -y \
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# Playwright + Chromium para render AntV Infographic → PNG en el agente
+RUN npx playwright install-deps chromium \
+    && npx playwright install chromium
+
 # CACHEBUST aquí — invalida COPY src/ y todo lo posterior cuando cambia
 # En Dokploy: Build Args → CACHEBUST = <timestamp o número creciente>
 ARG CACHEBUST=1
@@ -59,6 +63,10 @@ RUN npx tsup \
     src/core/embeddings.ts \
     src/core/storage.ts \
     src/core/image-cache.ts \
+    src/lib/antv-infographic-dsl.ts \
+    src/lib/infographic-render.ts \
+    src/lib/infographic-neurona.ts \
+    src/tools/create-infographic.ts \
     --format esm --out-dir dist-server --no-dts
 
 ENV NODE_ENV=production
