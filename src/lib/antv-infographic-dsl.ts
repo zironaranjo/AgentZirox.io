@@ -82,14 +82,50 @@ function pickIcon(text: string, fallback: string): string {
     return fallback;
 }
 
+function truncateWords(text: string, maxChars: number, maxWords = 4): string {
+    const words = escLine(text).split(' ').filter(Boolean);
+    let out = '';
+    for (const w of words.slice(0, maxWords)) {
+        const next = out ? `${out} ${w}` : w;
+        if (next.length > maxChars) break;
+        out = next;
+    }
+    return out || escLine(text).slice(0, maxChars);
+}
+
+/** Etiqueta corta para pills (sin …) + desc con el texto completo recortado. */
+function pillItem(raw: string, maxLabel = 18): { label: string; desc: string } {
+    const text = escLine(raw);
+    if (!text || text.toLowerCase() === 'undefined') return { label: 'Detalle', desc: '' };
+    const label = truncateWords(text, maxLabel, 3);
+    const desc = text.length > label.length ? text.slice(0, 72) : '';
+    return { label, desc };
+}
+
+function normalizeTitleSubtitle(title: string, subtitle?: string): { title: string; desc: string } {
+    let t = escLine(title) || 'Infografía';
+    let d = escLine(subtitle ?? '');
+
+    if (t.length > 52 && t.includes(':')) {
+        const [a, b] = t.split(':').map((s) => s.trim());
+        if (a && b) {
+            t = truncateWords(a, 48, 6);
+            if (!d) d = truncateWords(b, 42, 6);
+        }
+    }
+    t = truncateWords(t, 52, 8);
+    if (d.length > 42) d = truncateWords(d, 42, 6);
+    return { title: t, desc: d };
+}
+
 function compareChildrenLines(items: string[], iconFallback: string, maxItems: number): string {
     return items
         .slice(0, maxItems)
         .map((raw) => {
-            const { label, desc } = splitLabelDesc(raw, 28, 100);
+            const { label, desc } = pillItem(raw, 18);
             const icon = pickIcon(raw, iconFallback);
             const lines = [`        - label ${label}`, `          icon ${icon}`];
-            if (desc) lines.push(`          desc ${desc}`);
+            if (desc && desc !== label) lines.push(`          desc ${desc}`);
             return lines.join('\n');
         })
         .join('\n');
@@ -127,8 +163,7 @@ export function infographicHtmlBackground(): string {
 }
 
 export function buildAntvInfographicDsl(input: InfographicInput): string {
-    const title = escLine(input.title) || 'Infografía';
-    const desc = escLine(input.subtitle ?? 'Generada por AgentZirox');
+    const { title, desc } = normalizeTitleSubtitle(input.title, input.subtitle);
     const steps = coerceInfographicItems(input.steps);
     const benefits = coerceInfographicItems(input.benefits);
     const style = resolveStyle();
@@ -137,12 +172,12 @@ export function buildAntvInfographicDsl(input: InfographicInput): string {
     if (benefits.length < 2) throw new Error('Se necesitan al menos 2 beneficios con texto válido');
 
     if (style === 'pro') {
-        const left = compareChildrenLines(steps, 'list check', 4);
-        const right = compareChildrenLines(benefits, 'star fill', 4);
+        const left = compareChildrenLines(steps, 'list check', 3);
+        const right = compareChildrenLines(benefits, 'star fill', 3);
+        const descLine = desc ? `\n  desc ${desc}` : '';
         return `infographic ${TEMPLATE_PRO}
 data
-  title ${title}
-  desc ${desc}
+  title ${title}${descLine}
   compares
     - label Cómo funciona
       icon arrow right

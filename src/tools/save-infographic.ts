@@ -1,5 +1,7 @@
 import { registerTool } from '../core/dispatcher';
 import { logger } from '../core/logger';
+import { getToolContext } from '../core/tool-context';
+import { listInfographicJobs } from '../core/storage';
 
 const GH_BASE = 'https://api.github.com';
 export const INFOGRAPHIC_NEURONA_PATH = 'proyectos/AgentZirox - Neurona Infografias.md';
@@ -210,26 +212,52 @@ registerTool({
         const query = String((args as { query?: string }).query ?? '')
             .trim()
             .toLowerCase();
-        const content = await readNeuronaContent();
-        let rows = parseInfographicTable(content);
-        if (query) {
-            rows = rows.filter(
-                (r) =>
-                    r.description.toLowerCase().includes(query) ||
-                    r.origin.toLowerCase().includes(query)
-            );
+        const ctx = getToolContext();
+        const lines: string[] = [];
+
+        try {
+            const jobs = await listInfographicJobs(ctx?.chatId, 15);
+            const filtered = query
+                ? jobs.filter((j) => j.title.toLowerCase().includes(query))
+                : jobs;
+            if (filtered.length > 0) {
+                lines.push('**Recientes (Supabase):**');
+                for (const j of filtered) {
+                    lines.push(`• #${j.id} — ${j.title}`);
+                    if (j.png_url) lines.push(`  PNG: ${j.png_url}`);
+                }
+            }
+        } catch {
+            /* Postgres opcional */
         }
-        if (rows.length === 0) {
+
+        try {
+            const content = await readNeuronaContent();
+            let rows = parseInfographicTable(content);
+            if (query) {
+                rows = rows.filter(
+                    (r) =>
+                        r.description.toLowerCase().includes(query) ||
+                        r.origin.toLowerCase().includes(query)
+                );
+            }
+            if (rows.length > 0) {
+                if (lines.length) lines.push('');
+                lines.push('**Biblioteca Obsidian:**');
+                for (const r of rows) {
+                    lines.push(`• #${r.num} — ${r.description} (${r.fecha})`);
+                    if (r.pngUrl) lines.push(`  PNG: ${r.pngUrl}`);
+                }
+            }
+        } catch {
+            /* GitHub neurona opcional */
+        }
+
+        if (lines.length === 0) {
             return query
-                ? `No hay infografías guardadas que coincidan con "${query}".`
-                : 'No hay infografías guardadas aún. Usa save_infographic tras crear una en Canva.';
+                ? `No hay infografías que coincidan con "${query}".`
+                : 'No hay infografías guardadas. Usa create_infographic para crear una.';
         }
-        const lines = rows.map((r) => {
-            const parts = [`• #${r.num} — ${r.description} (${r.fecha})`];
-            if (r.designUrl) parts.push(`  Canva: ${r.designUrl}`);
-            if (r.pngUrl) parts.push(`  PNG: ${r.pngUrl}`);
-            return parts.join('\n');
-        });
-        return `📊 Infografías (${rows.length}):\n\n${lines.join('\n\n')}`;
+        return `📊 Infografías:\n\n${lines.join('\n')}`;
     },
 });

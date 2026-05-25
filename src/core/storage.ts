@@ -111,6 +111,27 @@ export async function updateInfographicJobPng(jobId: number, pngUrl: string): Pr
     if (error) throw new Error(`Error actualizando job #${jobId}: ${error.message}`);
 }
 
+export async function listInfographicJobs(chatId?: string, limit = 12): Promise<
+    Array<{ id: number; title: string; png_url: string | null; created_at: string; status: string }>
+> {
+    const supabase = getClient();
+    let query = supabase
+        .from('infographic_jobs')
+        .select('id, title, png_url, created_at, status')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+    if (chatId) query = query.eq('chat_id', chatId);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return (data ?? []) as Array<{
+        id: number;
+        title: string;
+        png_url: string | null;
+        created_at: string;
+        status: string;
+    }>;
+}
+
 export async function listMedia(chatId?: string, limit = 20): Promise<MediaRecord[]> {
     const supabase = getClient();
     let query = supabase
