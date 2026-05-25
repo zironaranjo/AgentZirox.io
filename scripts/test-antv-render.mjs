@@ -1,19 +1,28 @@
-import { buildAntvInfographicDsl, buildAntvInfographicHtml } from '../src/lib/antv-infographic-dsl.ts';
+import { buildAntvInfographicDsl, buildAntvInfographicHtml, coerceInfographicItems } from '../src/lib/antv-infographic-dsl.ts';
 import { writeFileSync } from 'fs';
 
+const steps = coerceInfographicItems([
+  { label: 'Captura inmediata por Telegram' },
+  { text: 'Prioriza por urgencia' },
+  'Revisa y actualiza cada día',
+]);
+const benefits = coerceInfographicItems([
+  'Menos estrés',
+  'Más productividad',
+  'Cumples objetivos',
+]);
+
+console.log('steps', steps);
 const dsl = buildAntvInfographicDsl({
-  title: 'AgentZirox recuerda tus tareas',
-  subtitle: 'Memoria + n8n + Telegram',
-  steps: ['Pide al agente por Telegram', 'n8n guarda en Postgres', 'Te avisa a la hora'],
-  benefits: ['Sin olvidar pendientes', 'IDs reales, sin alucinar', 'Obsidian sincronizado'],
+  title: 'Domina tu Productividad',
+  subtitle: 'Gestión inteligente de tareas',
+  steps,
+  benefits,
 });
+console.log(dsl);
+writeFileSync('.tmp-antv-test.html', buildAntvInfographicHtml(dsl));
 
-console.log('DSL:\n', dsl.slice(0, 400), '...\n');
-
-const html = buildAntvInfographicHtml(dsl);
-writeFileSync('.tmp-antv-test.html', html);
-
-const { renderInfographicHtmlToPng } = await import('../src/lib/infographic-render.ts');
-const png = await renderInfographicHtmlToPng(html);
+const { renderAntvInfographicToPng } = await import('../src/lib/infographic-render.ts');
+const png = await renderAntvInfographicToPng(dsl);
 writeFileSync('.tmp-antv-test.png', png);
-console.log('OK PNG', png.length, 'bytes → .tmp-antv-test.png');
+console.log('OK', png.length, 'bytes');

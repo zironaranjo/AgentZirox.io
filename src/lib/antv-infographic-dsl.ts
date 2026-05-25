@@ -6,21 +6,59 @@ export type InfographicInput = {
     template?: string;
 };
 
-/** Evita solapamiento: cuadrícula con tarjetas (no compare-binary). */
 const DEFAULT_TEMPLATE = 'list-grid-badge-card';
 
 function escLine(s: string): string {
     return String(s).replace(/\s+/g, ' ').trim();
 }
 
-/** Título corto en la tarjeta + detalle en desc (AntV lo maquetea bien). */
-function splitLabelDesc(raw: string, maxLabel = 36, maxDesc = 72): { label: string; desc: string } {
+/** Normaliza ítems del LLM (strings, objetos {label,text,step}…) — evita "undefined". */
+export function coerceInfographicItems(value: unknown): string[] {
+    const bad = new Set(['', 'undefined', 'null', '[object object]']);
+
+    const push = (out: string[], raw: string) => {
+        const t = escLine(raw);
+        if (!t || bad.has(t.toLowerCase())) return;
+        out.push(t);
+    };
+
+    if (Array.isArray(value)) {
+        const out: string[] = [];
+        for (const item of value) {
+            if (item == null) continue;
+            if (typeof item === 'string' || typeof item === 'number') {
+                push(out, String(item));
+                continue;
+            }
+            if (typeof item === 'object') {
+                const o = item as Record<string, unknown>;
+                const text = o.label ?? o.text ?? o.step ?? o.title ?? o.description ?? o.desc ?? o.name;
+                if (text != null) push(out, String(text));
+            }
+        }
+        return out;
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+        return value
+            .split(/\n+|(?:\s*[,;]\s*)/)
+            .map((s) => s.trim().replace(/^[-•*★]\s*|\d+[.)]\s*/, ''))
+            .filter((s) => s && !bad.has(s.toLowerCase()));
+    }
+
+    return [];
+}
+
+function splitLabelDesc(raw: string, maxLabel = 40, maxDesc = 80): { label: string; desc: string } {
     const text = escLine(raw);
+    if (!text || text.toLowerCase() === 'undefined') {
+        return { label: 'Detalle', desc: '' };
+    }
     if (text.length <= maxLabel) return { label: text, desc: '' };
     const cut = text.slice(0, maxLabel);
     const lastSpace = cut.lastIndexOf(' ');
-    const label = (lastSpace > 18 ? cut.slice(0, lastSpace) : cut).trim() + '…';
-    const rest = text.slice(lastSpace > 18 ? lastSpace : maxLabel).trim();
+    const label = ((lastSpace > 14 ? cut.slice(0, lastSpace) : cut).trim() || text.slice(0, maxLabel)) + '…';
+    const rest = text.slice(lastSpace > 14 ? lastSpace : maxLabel).trim();
     const desc = rest.length > maxDesc ? rest.slice(0, maxDesc - 1) + '…' : rest;
     return { label, desc };
 }
@@ -43,41 +81,69 @@ function pickIcon(text: string, fallback: string): string {
     return fallback;
 }
 
-function listItemLines(
-    items: string[],
-    iconFallback: string,
-    prefix: string,
-    maxItems: number
-): string {
+function listItemLines(items: string[], iconFallback: string, tag: string, maxItems: number): string {
     return items.slice(0, maxItems).map((raw, i) => {
         const { label, desc } = splitLabelDesc(raw);
         const icon = pickIcon(raw, iconFallback);
-        const lines = [`    - label ${prefix}${i + 1}. ${label}`, `      icon ${icon}`];
+        const head = tag ? `${tag}: ` : '';
+        const lines = [`    - label ${head}${label}`, `      icon ${icon}`];
         if (desc) lines.push(`      desc ${desc}`);
         return lines.join('\n');
     }).join('\n');
 }
 
-/**
- * DSL AntV: título + cuadrícula de pasos y beneficios (legible, sin PROS/CONS).
- */
+function sequenceItemLines(items: string[], iconFallback: string, maxItems: number): string {
+    return items.slice(0, maxItems).map((raw) => {
+        const { label, desc } = splitLabelDesc(raw);
+        const icon = pickIcon(raw, iconFallback);
+        const lines = [`    - label ${label}`, `      icon ${icon}`];
+        if (desc) lines.push(`      desc ${desc}`);
+        return lines.join('\n');
+    }).join('\n');
+}
+
+function resolveTemplate(requested?: string): string {
+    const fromEnv = process.env.INFOGRAPHIC_ANTV_TEMPLATE?.trim();
+    const t = (requested?.trim() || fromEnv || DEFAULT_TEMPLATE).toLowerCase();
+    if (t.startsWith('sequence-')) return requested?.trim() || fromEnv || 'sequence-ascending-steps';
+    return DEFAULT_TEMPLATE;
+}
+
 export function buildAntvInfographicDsl(input: InfographicInput): string {
-    const title = escLine(input.title);
+    const title = escLine(input.title) || 'Infografía';
     const desc = escLine(input.subtitle ?? 'Generada por AgentZirox');
-    const template = input.template?.trim() || DEFAULT_TEMPLATE;
+    const steps = coerceInfographicItems(input.steps);
+    const benefits = coerceInfographicItems(input.benefits);
+    const template = resolveTemplate(input.template);
 
-    const stepCount = Math.min(input.steps.length, 4);
-    const benefitCount = Math.min(input.benefits.length, 4);
-    const steps = listItemLines(input.steps, 'arrow right', '', stepCount);
-    const benefits = listItemLines(input.benefits, 'star fill', '★ ', benefitCount);
+    if (steps.length < 2) throw new Error('Se necesitan al menos 2 pasos con texto válido');
+    if (benefits.length < 2) throw new Error('Se necesitan al menos 2 beneficios con texto válido');
 
-    return `infographic ${template}
+    if (template.startsWith('sequence-')) {
+        const all = [...steps, ...benefits.slice(0, Math.max(0, 6 - steps.length))];
+        const sequences = sequenceItemLines(all, 'arrow right', 6);
+        return `infographic ${template}
+data
+  title ${title}
+  desc ${desc}
+  sequences
+${sequences}
+  order asc
+theme
+  palette #8b5cf6 #38bdf8 #34d399 #fbbf24
+  base.text.fill #f8fafc`;
+    }
+
+    const stepsBlock = listItemLines(steps, 'list check', 'Paso', 4);
+    const benefitsBlock = listItemLines(benefits, 'star fill', 'Beneficio', 4);
+
+    return `infographic list-grid-badge-card
 data
   title ${title}
   desc ${desc}
   lists
-${steps}
-${benefits}
+${stepsBlock}
+${benefitsBlock}
 theme
   palette #8b5cf6 #38bdf8 #34d399 #fbbf24
   base.text.fill #f8fafc`;
@@ -106,14 +172,14 @@ export function buildAntvInfographicHtml(dsl: string, width = 1080, height = 135
     container: '#container',
     width: ${width},
     height: ${height},
-    padding: [32, 40, 32, 40],
+    padding: [36, 44, 36, 44],
     editable: false,
   });
   window.__INFO_READY__ = false;
   window.__INFO_ERROR__ = null;
   info.on('loaded', function () { window.__INFO_READY__ = true; });
   info.on('error', function (e) {
-    window.__INFO_ERROR__ = String(e && e.message ? e.message : e);
+    window.__INFO_ERROR__ = JSON.stringify(e);
   });
   info.render(dsl);
   if (document.fonts && document.fonts.ready) {

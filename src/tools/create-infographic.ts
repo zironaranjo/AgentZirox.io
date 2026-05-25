@@ -1,7 +1,7 @@
 import { registerTool } from '../core/dispatcher';
 import { getToolContext } from '../core/tool-context';
 import { logger } from '../core/logger';
-import { buildAntvInfographicDsl } from '../lib/antv-infographic-dsl';
+import { buildAntvInfographicDsl, coerceInfographicItems } from '../lib/antv-infographic-dsl';
 import { renderAntvInfographicToPng } from '../lib/infographic-render';
 import { archiveInfographicToNeurona } from '../lib/infographic-neurona';
 import { updateInfographicJobPng, uploadInfographicPng } from '../core/storage';
@@ -62,17 +62,6 @@ async function callCreateInfographic(payload: Record<string, unknown>): Promise<
     return data;
 }
 
-function parseStringArray(value: unknown): string[] {
-    if (Array.isArray(value)) return value.map(String).map((s) => s.trim()).filter(Boolean);
-    if (typeof value === 'string' && value.trim()) {
-        return value
-            .split(/\n+/)
-            .map((s) => s.trim().replace(/^[-•\d.]+\s*/, ''))
-            .filter(Boolean);
-    }
-    return [];
-}
-
 registerTool({
     name: 'create_infographic',
     description:
@@ -94,11 +83,6 @@ registerTool({
                 items: { type: 'string' },
                 description: 'Beneficios (3–4 ítems, frases cortas ~8 palabras)',
             },
-            template: {
-                type: 'string',
-                description:
-                    'Plantilla AntV opcional (ej. compare-binary-horizontal-simple-fold, sequence-ascending-steps, list-row-horizontal-icon-arrow)',
-            },
             example_input: { type: 'string', description: 'Ejemplo de prompt (opcional)' },
             example_output: { type: 'string', description: 'Ejemplo de resultado (opcional)' },
         },
@@ -112,21 +96,25 @@ registerTool({
             subtitle?: string;
             steps?: unknown;
             benefits?: unknown;
-            template?: string;
             example_input?: string;
             example_output?: string;
         };
 
         const title = String(a.title ?? '').trim();
         const subtitle = String(a.subtitle ?? 'Generada por AgentZirox').trim();
-        const steps = parseStringArray(a.steps);
-        const benefits = parseStringArray(a.benefits);
+        const steps = coerceInfographicItems(a.steps);
+        const benefits = coerceInfographicItems(a.benefits);
         if (!title) throw new Error('title vacío');
-        if (steps.length < 2) throw new Error('Incluye al menos 2 steps');
-        if (benefits.length < 2) throw new Error('Incluye al menos 2 benefits');
+        if (steps.length < 2) {
+            throw new Error(
+                'steps inválidos: envía un array de strings cortos (ej. ["Captura por Telegram","Prioriza tareas"]). No uses objetos vacíos.'
+            );
+        }
+        if (benefits.length < 2) {
+            throw new Error('benefits inválidos: envía frases cortas en array de strings.');
+        }
 
         const chatId = ctx?.chatId ?? 'global';
-        const template = String(a.template ?? '').trim() || undefined;
 
         const data = await callCreateInfographic({
             action: 'create',
@@ -138,13 +126,11 @@ registerTool({
             example_input: String(a.example_input ?? '').trim(),
             example_output: String(a.example_output ?? '').trim(),
             brand: 'zirox',
-            template,
         });
 
         const jobId = Number(data.job_id);
-        const dsl =
-            String(data.antv_dsl ?? '').trim() ||
-            buildAntvInfographicDsl({ title, subtitle, steps, benefits, template });
+        // Siempre DSL local (n8n antv_dsl puede llevar "undefined" si steps llegan como objetos)
+        const dsl = buildAntvInfographicDsl({ title, subtitle, steps, benefits });
 
         logger.info('[create_infographic] Renderizando AntV Infographic → PNG…');
         const pngBuffer = await renderAntvInfographicToPng(dsl);
@@ -168,7 +154,7 @@ registerTool({
         const neurona = await archiveInfographicToNeurona({
             description: title,
             pngUrl,
-            designUrl: `antv:${template ?? 'list-grid-badge-card'}`,
+            designUrl: 'antv:list-grid-badge-card',
             origin: 'AntV Infographic auto',
         });
 
