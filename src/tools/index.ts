@@ -20,6 +20,7 @@ import './schedule-task';
 import './agent-tasks';
 import './save-infographic';
 import './create-infographic';
+import './create-infographic-notebooklm';
 import './drive-create-folder';
 import './drive-save-important-emails';
 import './drive-archive-important-emails';

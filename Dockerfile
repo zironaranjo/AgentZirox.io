@@ -5,9 +5,14 @@ WORKDIR /app
 # herramientas de compilación para better-sqlite3
 RUN apt-get update && apt-get install -y \
     python3 \
+    python3-pip \
     make \
     g++ \
     && rm -rf /var/lib/apt/lists/*
+
+# NotebookLM (opcional): pip install + notebooklm login en volumen ~/.notebooklm
+COPY scripts/requirements-notebooklm.txt ./scripts/
+RUN pip3 install --no-cache-dir -r scripts/requirements-notebooklm.txt || echo "NotebookLM deps skipped"
 
 # dependencias (cacheado mientras package.json no cambie)
 COPY package.json package-lock.json ./
@@ -66,11 +71,15 @@ RUN npx tsup \
     src/lib/antv-infographic-dsl.ts \
     src/lib/infographic-render.ts \
     src/lib/infographic-neurona.ts \
+    src/lib/notebooklm-infographic.ts \
     src/tools/create-infographic.ts \
+    src/tools/create-infographic-notebooklm.ts \
     --format esm --out-dir dist-server --no-dts
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV NOTEBOOKLM_HOME=/app/.notebooklm
+RUN mkdir -p /app/.notebooklm/profiles/default
 
 EXPOSE 3000
 

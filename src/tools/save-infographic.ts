@@ -256,7 +256,7 @@ registerTool({
         if (lines.length === 0) {
             return query
                 ? `No hay infografías que coincidan con "${query}".`
-                : 'No hay infografías guardadas. Usa create_infographic para crear una.';
+                : 'No hay infografías guardadas. Usa create_infographic (rápida) o create_infographic_notebooklm (premium).';
         }
         return `📊 Infografías:\n\n${lines.join('\n')}`;
     },
