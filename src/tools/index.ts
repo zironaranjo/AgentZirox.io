@@ -19,6 +19,7 @@ import './remember-user';
 import './schedule-task';
 import './agent-tasks';
 import './save-infographic';
+import './create-infographic';
 import './drive-create-folder';
 import './drive-save-important-emails';
 import './drive-archive-important-emails';

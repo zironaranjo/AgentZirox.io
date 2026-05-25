@@ -55,11 +55,11 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
         'create_folder', 'write_file', 'read_file', 'list_files', 'append_file',
         'capture_note', 'create_client_workspace',
         'obsidian_search', 'obsidian_read', 'obsidian_write',
-        'save_infographic', 'list_infographics',
+        'save_infographic', 'list_infographics', 'create_infographic',
     ],
     notes: [
         'obsidian_search', 'obsidian_read', 'obsidian_write',
-        'save_infographic', 'list_infographics',
+        'save_infographic', 'list_infographics', 'create_infographic',
     ],
     drive: [
         'drive_create_folder', 'drive_save_important_emails', 'drive_archive_important_emails',

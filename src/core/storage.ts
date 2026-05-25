@@ -79,6 +79,38 @@ export async function deleteMedia(id: number): Promise<{ bucketPath: string }> {
     return { bucketPath: data.bucket_path };
 }
 
+const INFOGRAPHIC_BUCKET_PREFIX = 'infographics';
+
+export async function uploadInfographicPng(
+    buffer: Buffer,
+    chatId: string,
+    slug: string
+): Promise<{ publicUrl: string; bucketPath: string }> {
+    const supabase = getClient();
+    const safeSlug = slug.replace(/[^a-z0-9-]/gi, '-').slice(0, 48) || 'infografia';
+    const path = `${INFOGRAPHIC_BUCKET_PREFIX}/${chatId}/${safeSlug}-${Date.now()}.png`;
+
+    const { error: uploadError } = await supabase.storage
+        .from(BUCKET)
+        .upload(path, buffer, { contentType: 'image/png', upsert: false });
+
+    if (uploadError) throw new Error(`Error subiendo infografía: ${uploadError.message}`);
+
+    const {
+        data: { publicUrl },
+    } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    return { publicUrl, bucketPath: path };
+}
+
+export async function updateInfographicJobPng(jobId: number, pngUrl: string): Promise<void> {
+    const supabase = getClient();
+    const { error } = await supabase
+        .from('infographic_jobs')
+        .update({ png_url: pngUrl, status: 'delivered' })
+        .eq('id', jobId);
+    if (error) throw new Error(`Error actualizando job #${jobId}: ${error.message}`);
+}
+
 export async function listMedia(chatId?: string, limit = 20): Promise<MediaRecord[]> {
     const supabase = getClient();
     let query = supabase

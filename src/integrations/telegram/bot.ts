@@ -11,7 +11,10 @@ import {
 import { isLinkedInOAuthConfigured, publishLinkedInFeedPost } from '../linkedin/linkedin-api';
 import { listTools } from '../../core/dispatcher';
 import { logger } from '../../core/logger';
-import { consumePendingTelegramImageUrl } from '../../tools/generate-image';
+import {
+    consumePendingTelegramImageCaption,
+    consumePendingTelegramImageUrl,
+} from '../../tools/generate-image';
 import { consumePendingTelegramAudioPath } from '../../tools/tts-generate';
 import { cacheImage } from '../../core/image-cache';
 
@@ -358,14 +361,15 @@ export async function startTelegramBot() {
 /** Si generate_image o tts_generate dejaron pendientes, los envía antes del texto. */
 async function sendAgentReplyWithOptionalImage(ctx: Context, chatId: string, response: string) {
     const imageUrl = consumePendingTelegramImageUrl(chatId);
+    const imageCaption = consumePendingTelegramImageCaption(chatId) ?? '🖼️ Imagen generada';
     if (imageUrl) {
         try {
             const res = await fetch(imageUrl);
             if (res.ok) {
                 const buf = Buffer.from(await res.arrayBuffer());
-                await ctx.replyWithPhoto(new InputFile(buf, 'imagen.jpg'), { caption: '🖼️ Imagen generada' });
+                await ctx.replyWithPhoto(new InputFile(buf, 'infografia.png'), { caption: imageCaption });
             } else {
-                await ctx.replyWithPhoto(imageUrl, { caption: '🖼️ Imagen generada' });
+                await ctx.replyWithPhoto(imageUrl, { caption: imageCaption });
             }
         } catch (e) {
             logger.warn('No se pudo enviar foto; el texto incluye el enlace.', e);

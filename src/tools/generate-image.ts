@@ -10,6 +10,7 @@ const KIE_BASE = (process.env.KIE_BASE_URL?.trim() || 'https://api.kie.ai').repl
 
 /** URL temporal para que Telegram envíe la foto tras processMessage (mismo chat). */
 const pendingTelegramImageUrl = new Map<string, string>();
+const pendingTelegramImageCaption = new Map<string, string>();
 
 export function consumePendingTelegramImageUrl(chatId: string): string | undefined {
     const u = pendingTelegramImageUrl.get(chatId);
@@ -17,8 +18,18 @@ export function consumePendingTelegramImageUrl(chatId: string): string | undefin
     return u;
 }
 
+export function consumePendingTelegramImageCaption(chatId: string): string | undefined {
+    const c = pendingTelegramImageCaption.get(chatId);
+    if (c) pendingTelegramImageCaption.delete(chatId);
+    return c;
+}
+
 export function setPendingTelegramImageUrl(chatId: string, url: string): void {
     pendingTelegramImageUrl.set(chatId, url);
+}
+
+export function setPendingTelegramImageCaption(chatId: string, caption: string): void {
+    pendingTelegramImageCaption.set(chatId, caption.slice(0, 900));
 }
 
 function sleep(ms: number): Promise<void> {
