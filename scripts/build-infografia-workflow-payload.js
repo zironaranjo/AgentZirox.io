@@ -6,12 +6,14 @@ return [{json:{chat_id:String(b.chat_id||'global'),title,subtitle:String(b.subti
 
 const buildCode = `const d=$('Normalizar Entrada').first().json;
 const esc=s=>String(s).replace(/\\s+/g,' ').trim();
+const split=(t,max=36)=>{t=esc(t);if(t.length<=max)return{t,rest:''};const c=t.slice(0,max);const sp=c.lastIndexOf(' ');const L=(sp>18?c.slice(0,sp):c).trim()+'…';const R=t.slice(sp>18?sp:max).trim();return{L,d:R.slice(0,70)+(R.length>70?'…':'')}};
 const steps=d.steps.map((s,i)=>(i+1)+'. '+s).join('\\n');
 const benefits=d.benefits.map(b=>'- '+b).join('\\n');
 const guion='# Infografia: '+d.title+'\\n\\n## '+d.subtitle+'\\n\\n## Pasos\\n'+steps+'\\n\\n## Beneficios\\n'+benefits;
-const child=(items,icon)=>items.slice(0,8).map(s=>'        - label '+esc(s)+'\\n          icon '+icon).join('\\n');
-const tpl=d.template||'compare-binary-horizontal-simple-fold';
-const antv_dsl='infographic '+tpl+'\\ndata\\n  title '+esc(d.title)+'\\n  desc '+esc(d.subtitle)+'\\n  compares\\n    - label Pasos\\n      icon list check\\n      children\\n'+child(d.steps,'arrow right')+'\\n    - label Beneficios\\n      icon star fill\\n      children\\n'+child(d.benefits,'spark')+'\\ntheme\\n  palette #8b5cf6 #0ea5e9 #14b8a6 #f97316';
+const item=(raw,i,pfx,icon)=>{const x=split(raw);let o='    - label '+pfx+(i+1)+'. '+x.L+'\\n      icon '+icon; if(x.d)o+='\\n      desc '+x.d;return o;};
+const lists=[...d.steps.slice(0,4).map((s,i)=>item(s,i,'','arrow right')),...d.benefits.slice(0,4).map((s,i)=>item(s,i,'★ ','star fill'))].join('\\n');
+const tpl=d.template||'list-grid-badge-card';
+const antv_dsl='infographic '+tpl+'\\ndata\\n  title '+esc(d.title)+'\\n  desc '+esc(d.subtitle)+'\\n  lists\\n'+lists+'\\ntheme\\n  palette #8b5cf6 #38bdf8 #34d399 #fbbf24\\n  base.text.fill #f8fafc';
 return [{json:{...d,guion_md:guion,antv_dsl,html_content:antv_dsl}}];`;
 
 const respCode = `const gen=$('Generar Guion y AntV DSL').first().json;const id=$input.first().json.id||$('Guardar Job').first().json.id;

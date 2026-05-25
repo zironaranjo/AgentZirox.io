@@ -87,12 +87,12 @@ registerTool({
             steps: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'Pasos / inputs (2–8 frases cortas)',
+                description: 'Pasos (3–4 ítems, frases cortas ~8 palabras, sin párrafos largos)',
             },
             benefits: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'Beneficios / outputs (2–8 frases cortas)',
+                description: 'Beneficios (3–4 ítems, frases cortas ~8 palabras)',
             },
             template: {
                 type: 'string',
@@ -168,7 +168,7 @@ registerTool({
         const neurona = await archiveInfographicToNeurona({
             description: title,
             pngUrl,
-            designUrl: `antv:${template ?? 'compare-binary-horizontal-simple-fold'}`,
+            designUrl: `antv:${template ?? 'list-grid-badge-card'}`,
             origin: 'AntV Infographic auto',
         });
 

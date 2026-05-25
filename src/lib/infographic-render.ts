@@ -76,7 +76,7 @@ async function renderViaPlaywrightAntv(html: string): Promise<Buffer> {
         });
         if (err) throw new Error(`AntV Infographic: ${err}`);
 
-        await page.waitForTimeout(800);
+        await page.waitForTimeout(1200);
 
         const buf = await page.screenshot({
             type: 'png',
