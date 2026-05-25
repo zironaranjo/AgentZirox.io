@@ -55,9 +55,11 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
         'create_folder', 'write_file', 'read_file', 'list_files', 'append_file',
         'capture_note', 'create_client_workspace',
         'obsidian_search', 'obsidian_read', 'obsidian_write',
+        'save_infographic', 'list_infographics',
     ],
     notes: [
         'obsidian_search', 'obsidian_read', 'obsidian_write',
+        'save_infographic', 'list_infographics',
     ],
     drive: [
         'drive_create_folder', 'drive_save_important_emails', 'drive_archive_important_emails',
@@ -92,6 +94,7 @@ export const CORE_TOOLS = new Set<string>([
 export function classifyDomain(msg: string): Domain {
     const t = msg.toLowerCase();
 
+    if (/\b(infograf[ií]a|infographic|canva|diseño\s+para\s+linkedin|post\s+visual)\b/.test(t)) return 'notes';
     if (/\b(obsidian|vault|nota.*obsidian|obsidian.*nota|busca.*nota|buscar.*nota|crea.*nota|escribe.*nota|actualiza.*nota|lee.*nota|leer.*nota|muestra.*nota|abre.*nota|nota\s+en\s+obsidian|apunte.*obsidian)\b/.test(t)) return 'notes';
 
     if (/\b(tiktok|tik\s*tok|sube.*video|publica.*video|video.*tiktok|short[s]?|genera.*video.*tiktok|crea.*video.*tiktok)\b/.test(t)) return 'tiktok';
