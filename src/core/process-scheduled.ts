@@ -95,9 +95,13 @@ export async function tickScheduledTasksInternal(): Promise<{ processed: number;
             try {
                 const prompt =
                     `⏰ **Tarea programada** (ejecución automática)\n\n${task.instruction}\n\n` +
-                    `Ejecuta lo anterior AHORA y responde directamente al usuario. NO llames schedule_task ni programes nada nuevo — esto ya ES la ejecución del recordatorio.`;
+                    `Entrega el recordatorio al usuario en 1–3 frases. NO llames schedule_task ni otras tools.`;
                 const reply = await processMessage(task.chat_id, prompt);
-                await deliverScheduledReply(task.chat_id, `🔔 *Recordatorio*\n\n${reply}`);
+                const short =
+                    reply.length > 500
+                        ? `${reply.slice(0, 497).trim()}…`
+                        : reply;
+                await deliverScheduledReply(task.chat_id, `🔔 *Recordatorio*\n\n${short}`);
                 await markScheduledTaskDone(task.id);
                 processed++;
                 logger.info(`[scheduled] completed task ${task.id} for chat ${task.chat_id}`);

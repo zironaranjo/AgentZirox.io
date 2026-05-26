@@ -49,13 +49,14 @@ const DIRECT_RESULT_TOOLS = new Set([
     'linkedin_propose_post', 'save_image', 'list_images', 'obsidian_read', 'obsidian_search', 'obsidian_write',
     'schedule_task', 'save_agent_task', 'create_infographic', 'create_infographic_notebooklm',
     'create_notebooklm_audio',
+    'tts_generate',
 ]);
 
 // After these tools execute, stop the agent loop immediately.
 // linkedin_propose_post: result contains "/li_approve" — triggers hallucination detector → auto-approve.
 // schedule_task / save_agent_task: stop immediately to prevent duplicate task creation — hallucination
 // detector retries would call them again, creating the same reminder multiple times in the DB.
-const STOP_AFTER_TOOLS = new Set(['save_image', 'list_images', 'linkedin_propose_post', 'tiktok_propose_video', 'generate_video', 'approve_tiktok_video', 'reject_tiktok_video', 'obsidian_read', 'obsidian_search', 'obsidian_write', 'schedule_task', 'save_agent_task', 'create_infographic', 'create_infographic_notebooklm', 'create_notebooklm_audio']);
+const STOP_AFTER_TOOLS = new Set(['save_image', 'list_images', 'linkedin_propose_post', 'tiktok_propose_video', 'generate_video', 'approve_tiktok_video', 'reject_tiktok_video', 'obsidian_read', 'obsidian_search', 'obsidian_write', 'schedule_task', 'save_agent_task', 'create_infographic', 'create_infographic_notebooklm', 'create_notebooklm_audio', 'tts_generate']);
 
 // Tools excluded when processing an incoming photo — prevents proactive saves/generation.
 const IMAGE_RECEIVAL_EXCLUDED_TOOLS = new Set(['save_image', 'list_images', 'generate_image']);
@@ -169,6 +170,27 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         conversation.push({
             role: 'system',
             content: `[SISTEMA] ${taskActionRetryHint(userMessage)} Responde SOLO llamando la tool; no texto afirmando que ya lo hiciste.`,
+        });
+    }
+
+    const wantsTts =
+        /\b(convierte|convertir|lee|leer|pasa|pasar|genera|haz)\b/i.test(userMessage) &&
+        /\b(audio|voz|mp3|voz alta)\b/i.test(userMessage);
+    if (wantsTts && !isScheduledTaskFire) {
+        conversation.push({
+            role: 'system',
+            content:
+                '[SISTEMA] El usuario pide TTS. DEBES llamar tts_generate con el texto completo (voz jorge por defecto). ' +
+                'El MP3 se envía solo por Telegram. Tras la tool, no añadas párrafos extra.',
+        });
+    }
+
+    if (isScheduledTaskFire) {
+        conversation.push({
+            role: 'system',
+            content:
+                '[SISTEMA] Recordatorio automático. Responde en 1–3 frases cortas (máx 300 caracteres). ' +
+                'Sin preguntas al final. NO uses obsidian_read ni otras tools salvo que la instrucción lo pida explícitamente.',
         });
     }
 

@@ -379,16 +379,30 @@ async function sendAgentReplyWithOptionalImage(ctx: Context, chatId: string, res
     const audioPath = consumePendingTelegramAudioPath(chatId);
     if (audioPath) {
         try {
+            const fs = await import('node:fs/promises');
             const pathMod = await import('node:path');
-            const buf = await import('node:fs/promises').then(f => f.readFile(audioPath));
+            const buf = await fs.readFile(audioPath);
             const audioName = pathMod.basename(audioPath) || 'audio.mp3';
-            await ctx.replyWithAudio(new InputFile(buf, audioName));
+            await ctx.replyWithAudio(new InputFile(buf, audioName), {
+                caption: '🎙️ Audio · voz Jorge',
+            });
+            await fs.unlink(audioPath).catch(() => {});
         } catch (e) {
             logger.warn('No se pudo enviar audio TTS.', e);
         }
     }
 
-    await sendLongReply(ctx, response);
+    // Si ya enviamos audio, evitar párrafos largos duplicados
+    const trimmed = response.trim();
+    const skipText =
+        audioPath &&
+        (trimmed.length > 400 ||
+            /audio generado|voy a generar|posibles usos|qué te gustaría/i.test(trimmed));
+    if (!skipText) {
+        await sendLongReply(ctx, response);
+    } else if (trimmed.length <= 120) {
+        await sendLongReply(ctx, response);
+    }
 }
 
 async function sendLongReply(ctx: Context, response: string) {
