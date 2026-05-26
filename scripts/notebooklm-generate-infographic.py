@@ -104,7 +104,14 @@ def _map_style(value: str | None):
 
 def _is_rate_limit(exc: Exception) -> bool:
     msg = str(exc).lower()
-    return "ratelimit" in msg or "rate_limit" in msg or "rate limit" in msg
+    return (
+        "ratelimit" in msg
+        or "rate_limit" in msg
+        or "rate limit" in msg
+        # notebooklm-py swallows RateLimitError and raises this after polling
+        or "disappeared from list" in msg
+        or "not-found polls" in msg
+    )
 
 
 async def _generate(payload: dict) -> dict:
