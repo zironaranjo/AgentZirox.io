@@ -52,15 +52,15 @@ const DIRECT_RESULT_TOOLS = new Set([
 
 // After these tools execute, stop the agent loop immediately.
 // linkedin_propose_post: result contains "/li_approve" — triggers hallucination detector → auto-approve.
-// schedule_task removed: ACTION_PHRASES no longer contains "Tarea programada", so multiple tasks
-// can be created in one loop (user asks for two tasks at once).
-const STOP_AFTER_TOOLS = new Set(['save_image', 'list_images', 'linkedin_propose_post', 'tiktok_propose_video', 'generate_video', 'approve_tiktok_video', 'reject_tiktok_video', 'obsidian_read', 'obsidian_search', 'obsidian_write']);
+// schedule_task / save_agent_task: stop immediately to prevent duplicate task creation — hallucination
+// detector retries would call them again, creating the same reminder multiple times in the DB.
+const STOP_AFTER_TOOLS = new Set(['save_image', 'list_images', 'linkedin_propose_post', 'tiktok_propose_video', 'generate_video', 'approve_tiktok_video', 'reject_tiktok_video', 'obsidian_read', 'obsidian_search', 'obsidian_write', 'schedule_task', 'save_agent_task']);
 
 // Tools excluded when processing an incoming photo — prevents proactive saves/generation.
 const IMAGE_RECEIVAL_EXCLUDED_TOOLS = new Set(['save_image', 'list_images', 'generate_image']);
 
-// Tools excluded when a scheduled task fires — prevents the agent from re-scheduling (infinite loop).
-const SCHEDULED_EXEC_EXCLUDED_TOOLS = new Set(['schedule_task', 'list_scheduled_tasks', 'cancel_scheduled_task']);
+// Tools excluded when a scheduled task fires — prevents re-scheduling and re-saving the same task.
+const SCHEDULED_EXEC_EXCLUDED_TOOLS = new Set(['schedule_task', 'list_scheduled_tasks', 'cancel_scheduled_task', 'save_agent_task', 'list_agent_tasks']);
 
 async function processMessageInner(chatId: string, userMessage: string): Promise<string> {
     const traceId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
