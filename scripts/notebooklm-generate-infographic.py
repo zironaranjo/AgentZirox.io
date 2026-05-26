@@ -102,6 +102,11 @@ def _map_style(value: str | None):
     return mapping.get(key, InfographicStyle.EDITORIAL)
 
 
+def _is_rate_limit(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "ratelimit" in msg or "rate_limit" in msg or "rate limit" in msg
+
+
 async def _generate(payload: dict) -> dict:
     try:
         from notebooklm import NotebookLMClient
@@ -125,73 +130,90 @@ async def _generate(payload: dict) -> dict:
         or None
     )
 
-    try:
-        ctx = (
-            NotebookLMClient.from_storage(storage_path)
-            if storage_path
-            else NotebookLMClient.from_storage()
-        )
-        async with ctx as client:
-            nb = await client.notebooks.create(title)
-            nb_id = nb.id
+    max_attempts = 3
+    rate_limit_delay = 60.0  # seconds between retries on rate limit
 
-            if sources:
-                for url in sources[:8]:
-                    try:
-                        await client.sources.add_url(nb_id, url, wait=True, wait_timeout=120.0)
-                    except Exception:
-                        pass
-            else:
-                await client.sources.add_text(
+    for attempt in range(1, max_attempts + 1):
+        try:
+            ctx = (
+                NotebookLMClient.from_storage(storage_path)
+                if storage_path
+                else NotebookLMClient.from_storage()
+            )
+            async with ctx as client:
+                nb = await client.notebooks.create(title)
+                nb_id = nb.id
+
+                if sources:
+                    for url in sources[:8]:
+                        try:
+                            await client.sources.add_url(nb_id, url, wait=True, wait_timeout=120.0)
+                        except Exception:
+                            pass
+                else:
+                    await client.sources.add_text(
+                        nb_id,
+                        title[:80] or "Contenido",
+                        _build_source_text(payload),
+                        wait=True,
+                        wait_timeout=90.0,
+                    )
+
+                status = await client.artifacts.generate_infographic(
                     nb_id,
-                    title[:80] or "Contenido",
-                    _build_source_text(payload),
-                    wait=True,
-                    wait_timeout=90.0,
+                    language=language,
+                    instructions=instructions,
+                    orientation=orientation,
+                    detail_level=detail,
+                    style=style,
                 )
 
-            status = await client.artifacts.generate_infographic(
-                nb_id,
-                language=language,
-                instructions=instructions,
-                orientation=orientation,
-                detail_level=detail,
-                style=style,
-            )
+                final = await client.artifacts.wait_for_completion(
+                    nb_id,
+                    status.task_id,
+                    timeout=timeout,
+                )
 
-            final = await client.artifacts.wait_for_completion(
-                nb_id,
-                status.task_id,
-                timeout=timeout,
-            )
+                if getattr(final, "status", "") == "failed":
+                    return _err("NotebookLM falló al generar la infografía")
 
-            if getattr(final, "status", "") == "failed":
-                return _err("NotebookLM falló al generar la infografía")
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                    out_path = tmp.name
 
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                out_path = tmp.name
-
-            try:
-                await client.artifacts.download_infographic(nb_id, out_path)
-                png_bytes = Path(out_path).read_bytes()
-            finally:
                 try:
-                    Path(out_path).unlink(missing_ok=True)
-                except OSError:
-                    pass
+                    await client.artifacts.download_infographic(nb_id, out_path)
+                    png_bytes = Path(out_path).read_bytes()
+                finally:
+                    try:
+                        Path(out_path).unlink(missing_ok=True)
+                    except OSError:
+                        pass
 
-            if not png_bytes:
-                return _err("PNG vacío tras descarga")
+                if not png_bytes:
+                    return _err("PNG vacío tras descarga")
 
-            return {
-                "success": True,
-                "notebook_id": nb_id,
-                "task_id": status.task_id,
-                "png_base64": base64.b64encode(png_bytes).decode("ascii"),
-                "bytes": len(png_bytes),
-            }
-    except Exception as exc:
-        return _err(str(exc))
+                return {
+                    "success": True,
+                    "notebook_id": nb_id,
+                    "task_id": status.task_id,
+                    "png_base64": base64.b64encode(png_bytes).decode("ascii"),
+                    "bytes": len(png_bytes),
+                }
+
+        except Exception as exc:
+            if _is_rate_limit(exc) and attempt < max_attempts:
+                print(
+                    f"[notebooklm] RateLimitError (intento {attempt}/{max_attempts}) — "
+                    f"reintentando en {rate_limit_delay:.0f}s…",
+                    file=sys.stderr,
+                )
+                await asyncio.sleep(rate_limit_delay)
+                rate_limit_delay = min(rate_limit_delay * 2, 180.0)
+                continue
+            extra = " (puede ser sesión expirada: ejecuta 'notebooklm login' en el VPS)" if _is_rate_limit(exc) else ""
+            return _err(str(exc) + extra)
+
+    return _err("No se pudo generar la infografía tras todos los intentos")
 
 
 def main() -> None:
