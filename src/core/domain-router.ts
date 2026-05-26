@@ -30,6 +30,7 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
         'generate_video',
         'save_image', 'list_images', 'delete_image', 'get_saved_image',
         'tts_generate',
+        'create_notebooklm_audio',
         'youtube_transcript',
         'play_youtube',
     ],
@@ -56,10 +57,12 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
         'capture_note', 'create_client_workspace',
         'obsidian_search', 'obsidian_read', 'obsidian_write',
         'save_infographic', 'list_infographics', 'create_infographic', 'create_infographic_notebooklm',
+        'create_notebooklm_audio',
     ],
     notes: [
         'obsidian_search', 'obsidian_read', 'obsidian_write',
         'save_infographic', 'list_infographics', 'create_infographic', 'create_infographic_notebooklm',
+        'create_notebooklm_audio',
     ],
     drive: [
         'drive_create_folder', 'drive_save_important_emails', 'drive_archive_important_emails',

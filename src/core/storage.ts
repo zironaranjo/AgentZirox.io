@@ -81,6 +81,29 @@ export async function deleteMedia(id: number): Promise<{ bucketPath: string }> {
 
 const INFOGRAPHIC_BUCKET_PREFIX = 'infographics';
 
+export async function uploadNotebooklmAudio(
+    buffer: Buffer,
+    chatId: string,
+    slug: string,
+    mimeType: string,
+    ext: 'mp3' | 'mp4'
+): Promise<{ publicUrl: string; bucketPath: string }> {
+    const supabase = getClient();
+    const safeSlug = slug.replace(/[^a-z0-9-]/gi, '-').slice(0, 48) || 'audio';
+    const path = `notebooklm-audio/${chatId}/${safeSlug}-${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+        .from(BUCKET)
+        .upload(path, buffer, { contentType: mimeType, upsert: false });
+
+    if (uploadError) throw new Error(`Error subiendo audio NotebookLM: ${uploadError.message}`);
+
+    const {
+        data: { publicUrl },
+    } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    return { publicUrl, bucketPath: path };
+}
+
 export async function uploadInfographicPng(
     buffer: Buffer,
     chatId: string,

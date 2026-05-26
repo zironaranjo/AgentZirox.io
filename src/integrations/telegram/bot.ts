@@ -379,8 +379,10 @@ async function sendAgentReplyWithOptionalImage(ctx: Context, chatId: string, res
     const audioPath = consumePendingTelegramAudioPath(chatId);
     if (audioPath) {
         try {
+            const pathMod = await import('node:path');
             const buf = await import('node:fs/promises').then(f => f.readFile(audioPath));
-            await ctx.replyWithAudio(new InputFile(buf, 'audio.mp3'));
+            const audioName = pathMod.basename(audioPath) || 'audio.mp3';
+            await ctx.replyWithAudio(new InputFile(buf, audioName));
         } catch (e) {
             logger.warn('No se pudo enviar audio TTS.', e);
         }

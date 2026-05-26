@@ -12,6 +12,10 @@ export function consumePendingTelegramAudioPath(chatId: string): string | undefi
     return p;
 }
 
+export function setPendingTelegramAudioPath(chatId: string, filePath: string): void {
+    pendingTelegramAudioPath.set(chatId, filePath);
+}
+
 const VOICES: Record<string, string> = {
     elvira: 'es-ES-ElviraNeural',
     alvaro: 'es-ES-AlvaroNeural',

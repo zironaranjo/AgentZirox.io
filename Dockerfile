@@ -76,8 +76,10 @@ RUN npx tsup \
     src/lib/infographic-render.ts \
     src/lib/infographic-neurona.ts \
     src/lib/notebooklm-infographic.ts \
+    src/lib/notebooklm-audio.ts \
     src/tools/create-infographic.ts \
     src/tools/create-infographic-notebooklm.ts \
+    src/tools/create-notebooklm-audio.ts \
     --format esm --out-dir dist-server --no-dts
 
 ENV NODE_ENV=production
