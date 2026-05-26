@@ -171,9 +171,9 @@ registerTool({
         const tmpPath = join(tmpdir(), `saved-audio-${found.id}-${Date.now()}.${ext}`);
         await fs.writeFile(tmpPath, buf);
 
-        setPendingTelegramAudioPath(chatId, tmpPath);
+        setPendingTelegramAudioPath(chatId, tmpPath, `🎙️ ${found.caption}`);
 
-        return `🎙️ Enviando audio #${found.id}: **${found.caption}**\n🔗 ${found.public_url}`;
+        return `🎙️ Audio #${found.id}: ${found.caption}`;
     },
 });
 

@@ -15,7 +15,7 @@ import {
     consumePendingTelegramImageCaption,
     consumePendingTelegramImageUrl,
 } from '../../tools/generate-image';
-import { consumePendingTelegramAudioPath } from '../../tools/tts-generate';
+import { consumePendingTelegramAudioCaption, consumePendingTelegramAudioPath } from '../../tools/tts-generate';
 import { cacheImage } from '../../core/image-cache';
 
 const lastTranscriptionByChat = new Map<string, string>();
@@ -376,6 +376,7 @@ async function sendAgentReplyWithOptionalImage(ctx: Context, chatId: string, res
         }
     }
 
+    const audioCaption = consumePendingTelegramAudioCaption(chatId);
     const audioPath = consumePendingTelegramAudioPath(chatId);
     if (audioPath) {
         try {
@@ -386,7 +387,7 @@ async function sendAgentReplyWithOptionalImage(ctx: Context, chatId: string, res
             // Documento (no replyWithAudio): evita que Telegram encole y reproduzca
             // automáticamente el siguiente audio del chat al terminar uno.
             await ctx.replyWithDocument(new InputFile(buf, audioName), {
-                caption: '🎙️ Pulsa el archivo para escuchar · voz Jorge',
+                caption: audioCaption ?? '🎙️ Pulsa el archivo para escuchar',
             });
             await fs.unlink(audioPath).catch(() => {});
         } catch (e) {
@@ -399,7 +400,8 @@ async function sendAgentReplyWithOptionalImage(ctx: Context, chatId: string, res
     const skipText =
         audioPath &&
         (trimmed.length > 400 ||
-            /audio generado|voy a generar|posibles usos|qué te gustaría/i.test(trimmed));
+            /audio generado|voy a generar|posibles usos|qué te gustaría|🔗\s*https?:\/\//i.test(trimmed) ||
+            /^🎙️\s*Audio\s+#\d+/i.test(trimmed));
     if (!skipText) {
         await sendLongReply(ctx, response);
     } else if (trimmed.length <= 120) {

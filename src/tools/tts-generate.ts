@@ -7,15 +7,25 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const pendingTelegramAudioPath = new Map<string, string>();
+const pendingTelegramAudioCaption = new Map<string, string>();
 
 export function consumePendingTelegramAudioPath(chatId: string): string | undefined {
     const p = pendingTelegramAudioPath.get(chatId);
-    if (p) pendingTelegramAudioPath.delete(chatId);
+    if (p) {
+        pendingTelegramAudioPath.delete(chatId);
+        pendingTelegramAudioCaption.delete(chatId);
+    }
     return p;
 }
 
-export function setPendingTelegramAudioPath(chatId: string, filePath: string): void {
+export function consumePendingTelegramAudioCaption(chatId: string): string | undefined {
+    return pendingTelegramAudioCaption.get(chatId);
+}
+
+export function setPendingTelegramAudioPath(chatId: string, filePath: string, caption?: string): void {
     pendingTelegramAudioPath.set(chatId, filePath);
+    if (caption) pendingTelegramAudioCaption.set(chatId, caption);
+    else pendingTelegramAudioCaption.delete(chatId);
 }
 
 const VOICES: Record<string, string> = {

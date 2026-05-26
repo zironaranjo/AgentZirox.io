@@ -22,6 +22,16 @@ export interface IntentGetSavedImage {
     query: string;
 }
 
+export interface IntentGetSavedAudio {
+    type: 'get_saved_audio';
+    query: string;
+}
+
+export interface IntentListAudios {
+    type: 'list_audios';
+    limit?: number;
+}
+
 export interface IntentApproveLinkedIn {
     type: 'approve_linkedin';
     postId?: number;
@@ -44,6 +54,8 @@ export type Intent =
     | IntentListImages
     | IntentDeleteImage
     | IntentGetSavedImage
+    | IntentGetSavedAudio
+    | IntentListAudios
     | IntentApproveLinkedIn
     | IntentApproveTikTok
     | IntentLLM;
@@ -131,14 +143,36 @@ export function routeIntent(
 
     // ── 7. Get/retrieve saved image ───────────────────────────────────────────
     if (
-        /\b(muéstrame|muestrame|dame|envíame|enviame|tráeme|traeme|ver|muestra)\b.{0,30}\b(imagen|foto|picture|guardad)\b/i.test(msg) ||
+        /\b(muéstrame|muestrame|dame|envíame|enviame|tráeme|traeme|ver|muestra|ponme)\b.{0,30}\b(imagen|foto|picture|guardad)\b/i.test(msg) ||
         /\b(imagen|foto)\b.{0,20}\b(del|de la|que dice|llamad)\b/i.test(msg)
     ) {
         const queryMatch =
             msg.match(/(?:imagen|foto|picture)\s+(?:del?\s+|de\s+la\s+|que\s+(?:dice|es|muestra)\s+|llamad[ao]\s+)?(.+)/i) ||
-            msg.match(/(?:muéstrame|muestrame|dame|tráeme|traeme|envíame|enviame)\s+(.+)/i);
+            msg.match(/(?:muéstrame|muestrame|dame|tráeme|traeme|envíame|enviame|ponme)\s+(.+)/i);
         const query = queryMatch?.[1]?.trim() ?? msg;
         return { type: 'get_saved_image', query };
+    }
+
+    // ── 8. List saved audios ──────────────────────────────────────────────────
+    if (
+        /\b(lista|listar|ver|muestra|cuántos|cuantos|tengo)\b.{0,30}\b(audios|mp3)\b/i.test(msg) ||
+        /\b(audios|mp3)\b.{0,20}\b(guard|biblioteca)/i.test(msg)
+    ) {
+        const limitMatch = msg.match(/(\d+)\s*(audios|mp3)/i);
+        const limit = limitMatch ? parseInt(limitMatch[1], 10) : undefined;
+        return { type: 'list_audios', limit };
+    }
+
+    // ── 9. Get/retrieve saved audio ───────────────────────────────────────────
+    if (
+        /\b(ponme|muéstrame|muestrame|dame|envíame|enviame|tráeme|traeme|reproduce|escucha|quiero)\b.{0,30}\b(audio|mp3)\b/i.test(msg) ||
+        /\b(audio|mp3)\b.{0,20}\b(de|del|llamad)\b/i.test(msg)
+    ) {
+        const queryMatch =
+            msg.match(/(?:audio|mp3)\s+(?:de(?:l)?\s+|llamad[ao]\s+)?["']?([^"']+)["']?/i) ||
+            msg.match(/(?:ponme|muéstrame|muestrame|dame|tráeme|traeme|envíame|enviame)\s+(?:el\s+)?(?:audio|mp3)\s+(?:de\s+)?["']?([^"']+)["']?/i);
+        const query = (queryMatch?.[1] ?? msg).replace(/["'.!?]+$/g, '').trim();
+        return { type: 'get_saved_audio', query };
     }
 
     // ── Default: LLM ─────────────────────────────────────────────────────────

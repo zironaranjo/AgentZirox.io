@@ -56,7 +56,7 @@ const DIRECT_RESULT_TOOLS = new Set([
 // linkedin_propose_post: result contains "/li_approve" — triggers hallucination detector → auto-approve.
 // schedule_task / save_agent_task: stop immediately to prevent duplicate task creation — hallucination
 // detector retries would call them again, creating the same reminder multiple times in the DB.
-const STOP_AFTER_TOOLS = new Set(['save_image', 'list_images', 'linkedin_propose_post', 'tiktok_propose_video', 'generate_video', 'approve_tiktok_video', 'reject_tiktok_video', 'obsidian_read', 'obsidian_search', 'obsidian_write', 'schedule_task', 'save_agent_task', 'create_infographic', 'create_infographic_notebooklm', 'create_notebooklm_audio', 'tts_generate']);
+const STOP_AFTER_TOOLS = new Set(['save_image', 'list_images', 'get_saved_audio', 'linkedin_propose_post', 'tiktok_propose_video', 'generate_video', 'approve_tiktok_video', 'reject_tiktok_video', 'obsidian_read', 'obsidian_search', 'obsidian_write', 'schedule_task', 'save_agent_task', 'create_infographic', 'create_infographic_notebooklm', 'create_notebooklm_audio', 'tts_generate']);
 
 // Tools excluded when processing an incoming photo — prevents proactive saves/generation.
 const IMAGE_RECEIVAL_EXCLUDED_TOOLS = new Set(['save_image', 'list_images', 'generate_image']);
@@ -105,6 +105,17 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         case 'get_saved_image': {
             logger.info(`[agent] get_saved_image query="${intent.query}"`);
             const result = await executeTool('get_saved_image', { query: intent.query });
+            await saveMessage(chatId, 'assistant', result);
+            return result;
+        }
+        case 'list_audios': {
+            const result = await executeTool('list_audios', intent.limit ? { limit: intent.limit } : {});
+            await saveMessage(chatId, 'assistant', result);
+            return result;
+        }
+        case 'get_saved_audio': {
+            logger.info(`[agent] get_saved_audio query="${intent.query}"`);
+            const result = await executeTool('get_saved_audio', { query: intent.query });
             await saveMessage(chatId, 'assistant', result);
             return result;
         }
