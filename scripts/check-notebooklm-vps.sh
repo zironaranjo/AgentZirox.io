@@ -40,16 +40,39 @@ if [[ ! -f "$SCRIPT" ]]; then
 fi
 echo "OK — $SCRIPT"
 
-echo "[6] Test dry-run (solo import client, sin generar PNG)"
+echo "[6] Test sesion (listar notebooks, sin generar PNG)"
+export NOTEBOOKLM_STORAGE_PATH="$STORAGE"
 python3 - <<'PY'
 import asyncio
 import os
+import sys
+from pathlib import Path
+
+def storage_path() -> str:
+    p = os.environ.get("NOTEBOOKLM_STORAGE_PATH", "").strip()
+    if p:
+        return p
+    home = os.environ.get("NOTEBOOKLM_HOME", "/app/.notebooklm").strip()
+    return str(Path(home) / "profiles" / "default" / "storage_state.json")
 
 async def main():
+    path = storage_path()
+    if not Path(path).is_file():
+        print(f"FAIL — no existe {path}", file=sys.stderr)
+        sys.exit(1)
     from notebooklm import NotebookLMClient
-    async with NotebookLMClient.from_storage() as client:
-        nbs = await client.notebooks.list()
-        print(f"OK — sesion valida, {len(nbs)} notebooks")
+    try:
+        async with NotebookLMClient.from_storage(path) as client:
+            nbs = await client.notebooks.list()
+            print(f"OK — sesion valida ({path}), {len(nbs)} notebooks")
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "ratelimit" in msg or "rate limit" in msg:
+            print(f"WARN — sesion OK pero rate limit al listar: {exc}")
+            sys.exit(0)
+        print(f"FAIL — auth/sesion: {exc}", file=sys.stderr)
+        print("      Renueva: notebooklm login en PC + scp storage_state.json al VPS", file=sys.stderr)
+        sys.exit(1)
 
 asyncio.run(main())
 PY

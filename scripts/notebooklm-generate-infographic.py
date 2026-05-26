@@ -102,6 +102,18 @@ def _map_style(value: str | None):
     return mapping.get(key, InfographicStyle.EDITORIAL)
 
 
+def _resolve_storage_path(payload: dict) -> str | None:
+    explicit = (
+        str(payload.get("storage_path") or os.environ.get("NOTEBOOKLM_STORAGE_PATH") or "").strip()
+    )
+    if explicit:
+        return explicit
+    home = os.environ.get("NOTEBOOKLM_HOME", "").strip()
+    if home:
+        return str(Path(home) / "profiles" / "default" / "storage_state.json")
+    return None
+
+
 def _is_rate_limit(exc: Exception) -> bool:
     msg = str(exc).lower()
     return (
@@ -112,6 +124,24 @@ def _is_rate_limit(exc: Exception) -> bool:
         or "disappeared from list" in msg
         or "not-found polls" in msg
     )
+
+
+def _is_auth_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return any(
+        k in msg
+        for k in (
+            "auth",
+            "login",
+            "unauthorized",
+            "forbidden",
+            "not logged",
+            "session",
+            "csrf",
+            "cookie",
+            "storage_state",
+        )
+    ) and not _is_rate_limit(exc)
 
 
 async def _generate(payload: dict) -> dict:
@@ -132,10 +162,12 @@ async def _generate(payload: dict) -> dict:
     detail = _map_detail(str(payload.get("detail") or "standard"))
     style = _map_style(str(payload.get("style") or os.environ.get("NOTEBOOKLM_STYLE") or "editorial"))
 
-    storage_path = (
-        str(payload.get("storage_path") or os.environ.get("NOTEBOOKLM_STORAGE_PATH") or "").strip()
-        or None
-    )
+    storage_path = _resolve_storage_path(payload)
+    if storage_path and not Path(storage_path).is_file():
+        return _err(
+            f"Auth no encontrada en {storage_path}. "
+            "Vuelve a ejecutar notebooklm login y copia storage_state.json al VPS."
+        )
 
     max_attempts = 3
     rate_limit_delay = 60.0  # seconds between retries on rate limit
@@ -151,20 +183,19 @@ async def _generate(payload: dict) -> dict:
                 nb = await client.notebooks.create(title)
                 nb_id = nb.id
 
-                if sources:
-                    for url in sources[:8]:
-                        try:
-                            await client.sources.add_url(nb_id, url, wait=True, wait_timeout=120.0)
-                        except Exception:
-                            pass
-                else:
-                    await client.sources.add_text(
-                        nb_id,
-                        title[:80] or "Contenido",
-                        _build_source_text(payload),
-                        wait=True,
-                        wait_timeout=90.0,
-                    )
+                # Siempre texto base; URLs solo si el agente las pasó (fallan a menudo vía API)
+                await client.sources.add_text(
+                    nb_id,
+                    title[:80] or "Contenido",
+                    _build_source_text(payload),
+                    wait=True,
+                    wait_timeout=90.0,
+                )
+                for url in sources[:8]:
+                    try:
+                        await client.sources.add_url(nb_id, url, wait=True, wait_timeout=120.0)
+                    except Exception:
+                        pass
 
                 status = await client.artifacts.generate_infographic(
                     nb_id,
@@ -217,8 +248,19 @@ async def _generate(payload: dict) -> dict:
                 await asyncio.sleep(rate_limit_delay)
                 rate_limit_delay = min(rate_limit_delay * 2, 180.0)
                 continue
-            extra = " (puede ser sesión expirada: ejecuta 'notebooklm login' en el VPS)" if _is_rate_limit(exc) else ""
-            return _err(str(exc) + extra)
+            if _is_auth_error(exc):
+                return _err(
+                    str(exc)
+                    + " — Sesión Google expirada. En tu PC: scripts/setup-notebooklm-auth.ps1 "
+                    "y vuelve a copiar storage_state.json al VPS."
+                )
+            if _is_rate_limit(exc):
+                return _err(
+                    str(exc)
+                    + " — Cuota diaria de infografías NotebookLM agotada. "
+                    "Prueba en notebooklm.google.com o espera al reset."
+                )
+            return _err(str(exc))
 
     return _err("No se pudo generar la infografía tras todos los intentos")
 
