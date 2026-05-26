@@ -46,7 +46,7 @@ const ACTION_PHRASES = [
 
 // Tools whose results must be returned verbatim — LLM rewrite drops critical info (e.g. post ID).
 const DIRECT_RESULT_TOOLS = new Set([
-    'linkedin_propose_post', 'save_image', 'list_images', 'obsidian_read', 'obsidian_search', 'obsidian_write',
+    'linkedin_propose_post', 'save_image', 'list_images', 'get_saved_audio', 'obsidian_read', 'obsidian_search', 'obsidian_write',
     'schedule_task', 'save_agent_task', 'create_infographic', 'create_infographic_notebooklm',
     'create_notebooklm_audio',
     'tts_generate',

@@ -6,7 +6,7 @@ import { registerTool } from '../core/dispatcher';
 import { getToolContext } from '../core/tool-context';
 import { logger } from '../core/logger';
 import { runNotebooklmAudio } from '../lib/notebooklm-audio';
-import { uploadNotebooklmAudio } from '../core/storage';
+import { uploadAudioToStorage, uploadNotebooklmAudio } from '../core/storage';
 import { setPendingTelegramAudioPath } from './tts-generate';
 
 registerTool({
@@ -102,6 +102,15 @@ registerTool({
         const ext = mimeType.includes('mp4') ? 'mp4' : 'mp3';
         const uploaded = await uploadNotebooklmAudio(audioBuffer, chatId, `${slug}-nlm`, mimeType, ext);
         const audioUrl = uploaded.publicUrl;
+
+        try {
+            await uploadAudioToStorage(audioBuffer, mimeType, chatId, title, brief || title, {
+                voice: 'notebooklm',
+                source: 'notebooklm',
+            });
+        } catch (e) {
+            logger.warn('[create_notebooklm_audio] No se indexó en biblioteca de audios', e);
+        }
 
         const tempPath = join(tmpdir(), `notebooklm-audio-${Date.now()}.${ext}`);
         await fs.writeFile(tempPath, audioBuffer);

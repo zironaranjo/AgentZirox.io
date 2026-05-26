@@ -72,6 +72,7 @@ RUN npx tsup \
     src/core/embeddings.ts \
     src/core/storage.ts \
     src/core/image-cache.ts \
+    src/core/audio-cache.ts \
     src/lib/antv-infographic-dsl.ts \
     src/lib/infographic-render.ts \
     src/lib/infographic-neurona.ts \
@@ -80,6 +81,7 @@ RUN npx tsup \
     src/tools/create-infographic.ts \
     src/tools/create-infographic-notebooklm.ts \
     src/tools/create-notebooklm-audio.ts \
+    src/tools/save-audio.ts \
     --format esm --out-dir dist-server --no-dts
 
 ENV NODE_ENV=production

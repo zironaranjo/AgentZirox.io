@@ -167,3 +167,57 @@ export async function listMedia(chatId?: string, limit = 20): Promise<MediaRecor
     if (error) throw new Error(error.message);
     return (data ?? []) as MediaRecord[];
 }
+
+export async function uploadAudioToStorage(
+    buffer: Buffer,
+    mimeType: string,
+    chatId: string,
+    title: string,
+    description: string,
+    opts?: { voice?: string; source?: string }
+): Promise<{ publicUrl: string; id: number }> {
+    const supabase = getClient();
+    const ext = mimeType.includes('mp4') ? 'mp4' : 'mp3';
+    const safeSlug = title.toLowerCase().replace(/[^a-z0-9-]/gi, '-').slice(0, 48) || 'audio';
+    const path = `saved-audio/${chatId}/${safeSlug}-${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+        .from(BUCKET)
+        .upload(path, buffer, { contentType: mimeType, upsert: false });
+
+    if (uploadError) throw new Error(`Error subiendo audio: ${uploadError.message}`);
+
+    const {
+        data: { publicUrl },
+    } = supabase.storage.from(BUCKET).getPublicUrl(path);
+
+    const record = {
+        chat_id: chatId,
+        sender_name: opts?.source ?? 'tts',
+        sender_number: opts?.voice ?? '',
+        public_url: publicUrl,
+        bucket_path: path,
+        mime_type: mimeType,
+        caption: title.slice(0, 200),
+        vision_description: description.slice(0, 2000),
+    };
+
+    const { data, error: dbError } = await supabase.from('media').insert(record).select('id').single();
+    if (dbError) throw new Error(`Error guardando metadata de audio: ${dbError.message}`);
+
+    return { publicUrl, id: Number(data.id) };
+}
+
+export async function listAudioMedia(chatId?: string, limit = 20): Promise<MediaRecord[]> {
+    const supabase = getClient();
+    let query = supabase
+        .from('media')
+        .select('*')
+        .like('mime_type', 'audio%')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+    if (chatId) query = query.eq('chat_id', chatId);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return (data ?? []) as MediaRecord[];
+}

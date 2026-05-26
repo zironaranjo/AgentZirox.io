@@ -64,7 +64,7 @@ registerTool({
     handler: async (args) => {
         const chatId = getToolContext()?.chatId;
         const limit = Math.min(20, Math.max(1, Number(args.limit ?? 10)));
-        const records = await listMedia(chatId, limit);
+        const records = (await listMedia(chatId, limit)).filter((r) => !r.mime_type.startsWith('audio'));
         if (records.length === 0) return 'No hay imágenes guardadas aún.';
         const lines = records.map((r, i) => {
             const date = r.created_at ? new Date(r.created_at).toLocaleString('es-ES') : '';
@@ -107,7 +107,7 @@ registerTool({
         if (!chatId) throw new Error('No se pudo determinar el chat actual');
 
         const query = String(args.query ?? '').trim();
-        const records = await listMedia(chatId, 50);
+        const records = (await listMedia(chatId, 50)).filter((r) => !r.mime_type.startsWith('audio'));
         if (records.length === 0) return 'No hay imágenes guardadas para este chat.';
 
         // Buscar por ID (#3) o por texto en caption/vision_description

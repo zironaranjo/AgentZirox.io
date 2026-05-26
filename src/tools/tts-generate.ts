@@ -1,5 +1,7 @@
 import { registerTool } from '../core/dispatcher';
 import { getToolContext } from '../core/tool-context';
+import { cacheAudioFile, clearCachedAudio } from '../core/audio-cache';
+import { uploadAudioToStorage } from '../core/storage';
 import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -40,6 +42,11 @@ registerTool({
                 type: 'string',
                 description: 'Nombre del archivo de salida sin extensión (default: tts_output)',
             },
+            save_as: {
+                type: 'string',
+                description:
+                    'Si se indica, guarda en biblioteca con este nombre (ej: oración matutina) para recuperarlo después',
+            },
         },
         required: ['text'],
     },
@@ -77,10 +84,27 @@ registerTool({
 
         const stat = await fs.stat(outputPath);
         const kb = (stat.size / 1024).toFixed(1);
+        const audioBuffer = await fs.readFile(outputPath);
 
         const tctx = getToolContext();
         if (tctx?.chatId) {
+            await cacheAudioFile(tctx.chatId, outputPath, 'audio/mpeg', voiceKey, text);
             pendingTelegramAudioPath.set(tctx.chatId, outputPath);
+        }
+
+        const saveAs = String(args.save_as ?? '').trim();
+        let savedLine = '';
+        if (saveAs && tctx?.chatId) {
+            const { publicUrl, id } = await uploadAudioToStorage(
+                audioBuffer,
+                'audio/mpeg',
+                tctx.chatId,
+                saveAs,
+                text.slice(0, 500),
+                { voice: voiceKey, source: 'tts' }
+            );
+            savedLine = `\n💾 Guardado en biblioteca (#${id}): ${publicUrl}`;
+            await clearCachedAudio(tctx.chatId);
         }
 
         return [
@@ -88,6 +112,9 @@ registerTool({
             `🗣️ Voz: ${voice}`,
             `📊 Tamaño: ${kb} KB`,
             `📝 Texto (${text.length} chars): "${text.slice(0, 80)}${text.length > 80 ? '…' : ''}"`,
-        ].join('\n');
+            savedLine,
+        ]
+            .filter(Boolean)
+            .join('\n');
     },
 });

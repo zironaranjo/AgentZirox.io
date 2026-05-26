@@ -36,6 +36,7 @@ import './send-whatsapp';
 import './send-whatsapp-voice';
 import './knowledge';
 import './save-image';
+import './save-audio';
 import './update-user-context';
 import './tiktok';
 import './generate-video';
