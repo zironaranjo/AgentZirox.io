@@ -383,8 +383,10 @@ async function sendAgentReplyWithOptionalImage(ctx: Context, chatId: string, res
             const pathMod = await import('node:path');
             const buf = await fs.readFile(audioPath);
             const audioName = pathMod.basename(audioPath) || 'audio.mp3';
-            await ctx.replyWithAudio(new InputFile(buf, audioName), {
-                caption: '🎙️ Audio · voz Jorge',
+            // Documento (no replyWithAudio): evita que Telegram encole y reproduzca
+            // automáticamente el siguiente audio del chat al terminar uno.
+            await ctx.replyWithDocument(new InputFile(buf, audioName), {
+                caption: '🎙️ Pulsa el archivo para escuchar · voz Jorge',
             });
             await fs.unlink(audioPath).catch(() => {});
         } catch (e) {
