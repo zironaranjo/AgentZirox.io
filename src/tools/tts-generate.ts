@@ -21,7 +21,7 @@ const VOICES: Record<string, string> = {
     alvaro: 'es-ES-AlvaroNeural',
     jorge: 'es-MX-JorgeNeural',
     dalia: 'es-MX-DaliaNeural',
-    default: 'es-ES-ElviraNeural',
+    default: 'es-MX-JorgeNeural',
 };
 
 registerTool({
@@ -34,7 +34,7 @@ registerTool({
             text: { type: 'string', description: 'Texto a convertir en audio' },
             voice: {
                 type: 'string',
-                description: 'Voz a usar: elvira, alvaro, jorge, dalia (default: elvira)',
+                description: 'Voz a usar: elvira, alvaro, jorge, dalia (default: jorge)',
             },
             filename: {
                 type: 'string',
