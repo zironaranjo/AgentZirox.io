@@ -6,6 +6,7 @@ import {
     releaseStuckRunningTasks,
 } from './memory';
 import { sendTelegramChatMessage } from '../integrations/telegram/send-message';
+import { isAiNewsBriefing } from './search-locale';
 import { logger } from './logger';
 
 const WA_API_VERSION = 'v19.0';
@@ -62,6 +63,29 @@ function scheduledTasksEnabled(): boolean {
     return v === 'true' || v === '1' || v === 'yes';
 }
 
+function buildScheduledPrompt(instruction: string): string {
+    const base = `⏰ **Tarea programada** (ejecución automática)\n\n${instruction}\n\n`;
+
+    if (isAiNewsBriefing(instruction)) {
+        return (
+            base +
+            'BRIEFING NOTICIAS IA (OBLIGATORIO):\n' +
+            '1) Llama web_search UNA vez (la consulta ya filtra medios en español: Xataka, Hipertextual, Genbeta, El País, etc.).\n' +
+            '2) Resume 3 noticias en ESPAÑOL con este formato por cada una:\n' +
+            '   • **Titular** — por qué importa (1 frase) — 🔗 URL\n' +
+            '3) SOLO fuentes en español de la búsqueda. PROHIBIDO citar medios en inglés.\n' +
+            '4) PROHIBIDO inventar noticias. PROHIBIDO responder solo en inglés.\n' +
+            'NO llames schedule_task, save_agent_task ni cancel_scheduled_task.'
+        );
+    }
+
+    return (
+        base +
+        'Entrega el recordatorio al usuario en 1–3 frases, SIEMPRE en español (salvo que pida otro idioma). ' +
+        'NO llames schedule_task, save_agent_task ni cancel_scheduled_task.'
+    );
+}
+
 /** Evita dos ticks solapados (cron HTTP + ticker interno). */
 let tickInProgress = false;
 
@@ -93,15 +117,14 @@ export async function tickScheduledTasksInternal(): Promise<{ processed: number;
             if (!task) break;
 
             try {
-                const prompt =
-                    `⏰ **Tarea programada** (ejecución automática)\n\n${task.instruction}\n\n` +
-                    `Entrega el recordatorio al usuario en 1–3 frases. NO llames schedule_task ni otras tools.`;
+                const prompt = buildScheduledPrompt(task.instruction);
                 const reply = await processMessage(task.chat_id, prompt);
+                const isNews = isAiNewsBriefing(task.instruction);
+                const maxLen = isNews ? 3500 : 500;
                 const short =
-                    reply.length > 500
-                        ? `${reply.slice(0, 497).trim()}…`
-                        : reply;
-                await deliverScheduledReply(task.chat_id, `🔔 *Recordatorio*\n\n${short}`);
+                    reply.length > maxLen ? `${reply.slice(0, maxLen - 1).trim()}…` : reply;
+                const header = isNews ? '📰 *Noticias IA*' : '🔔 *Recordatorio*';
+                await deliverScheduledReply(task.chat_id, `${header}\n\n${short}`);
                 await markScheduledTaskDone(task.id);
                 processed++;
                 logger.info(`[scheduled] completed task ${task.id} for chat ${task.chat_id}`);

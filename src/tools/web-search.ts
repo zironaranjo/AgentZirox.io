@@ -1,4 +1,14 @@
 import { registerTool } from '../core/dispatcher';
+import {
+    isSpanishAiNewsSearch,
+    looksLikeAiTopic,
+    looksLikeNewsQuery,
+    searchLocaleGl,
+    searchLocaleHl,
+    spanishAiNewsDomains,
+    spanishAiNewsQuery,
+    spanishAiNewsQueryWithDomains,
+} from '../core/search-locale';
 
 interface SerperOrganic {
     title?: string;
@@ -11,17 +21,27 @@ function truncate(s: string, max: number): string {
     return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
 }
 
-async function searchSerper(query: string, limit: number): Promise<string | null> {
+async function searchSerper(
+    query: string,
+    limit: number,
+    opts?: { news?: boolean; includeDomains?: string[] }
+): Promise<string | null> {
     const key = process.env.SERPER_API_KEY;
     if (!key) return null;
 
-    const res = await fetch('https://google.serper.dev/search', {
+    const endpoint = opts?.news ? 'https://google.serper.dev/news' : 'https://google.serper.dev/search';
+    const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
             'X-API-KEY': key,
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ q: query, num: Math.min(limit, 10) }),
+        body: JSON.stringify({
+            q: query,
+            num: Math.min(limit, 10),
+            gl: searchLocaleGl(),
+            hl: searchLocaleHl(),
+        }),
     });
 
     if (!res.ok) {
@@ -40,7 +60,9 @@ async function searchSerper(query: string, limit: number): Promise<string | null
 
     const organic = data.organic ?? [];
     if (organic.length === 0 && lines.length === 0) {
-        return 'Sin resultados organicos en Serper para esta consulta.';
+        return opts?.news
+            ? 'Sin resultados de noticias en Serper para esta consulta.'
+            : 'Sin resultados organicos en Serper para esta consulta.';
     }
 
     organic.slice(0, limit).forEach((r, i) => {
@@ -53,19 +75,35 @@ async function searchSerper(query: string, limit: number): Promise<string | null
     return lines.join('\n\n');
 }
 
-async function searchTavily(query: string, limit: number): Promise<string | null> {
+async function searchTavily(
+    query: string,
+    limit: number,
+    opts?: { news?: boolean; includeDomains?: string[] }
+): Promise<string | null> {
     const key = process.env.TAVILY_API_KEY;
     if (!key) return null;
+
+    const body: Record<string, unknown> = {
+        api_key: key,
+        query,
+        max_results: Math.min(limit, 10),
+        search_depth: 'basic',
+    };
+    if (opts?.news) {
+        body.topic = 'news';
+        body.time_range = 'day';
+    } else {
+        body.topic = 'general';
+        body.country = searchLocaleGl();
+    }
+    if (opts?.includeDomains?.length) {
+        body.include_domains = opts.includeDomains.slice(0, 20);
+    }
 
     const res = await fetch('https://api.tavily.com/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            api_key: key,
-            query,
-            max_results: Math.min(limit, 10),
-            search_depth: 'basic',
-        }),
+        body: JSON.stringify(body),
     });
 
     if (!res.ok) {
@@ -131,7 +169,7 @@ async function searchDuckDuckGoInstant(query: string): Promise<string | null> {
 registerTool({
     name: 'web_search',
     description:
-        'Buscar informacion actual en internet (contactos, empresas, noticias, datos publicos). Usar cuando el usuario pida investigar, buscar en la web, o datos que no esten en el chat.',
+        'Buscar informacion actual en internet (contactos, empresas, noticias, datos publicos). Noticias de IA: consultas en ESPAÑOL y fuentes xataka.com, hipertextual.com, genbeta.com, elpais.com, etc.',
     parameters: {
         type: 'object',
         properties: {
@@ -153,15 +191,37 @@ registerTool({
 
         if (!query) throw new Error('query es obligatorio');
 
+        const wantsNews = looksLikeNewsQuery(query) || looksLikeAiTopic(query);
+        const esAiNews = isSpanishAiNewsSearch(query) || (wantsNews && looksLikeAiTopic(query));
+        const domains = esAiNews ? spanishAiNewsDomains() : [];
+
+        let effectiveQuery = query;
+        if (esAiNews) {
+            effectiveQuery = spanishAiNewsQueryWithDomains(domains);
+        } else if (wantsNews && looksLikeAiTopic(query) && !/\b(españa|español|spanish|hoy)\b/i.test(query)) {
+            effectiveQuery = spanishAiNewsQuery();
+        }
+
+        const searchOpts = { news: wantsNews, includeDomains: domains.length ? domains : undefined };
+
         try {
-            const serper = await searchSerper(query, limit);
-            if (serper) {
-                return `🌐 Resultados (Serper):\n\n${serper}`;
+            let serper = await searchSerper(effectiveQuery, limit, searchOpts);
+            if (serper && /sin resultados/i.test(serper) && domains.length > 0) {
+                serper = await searchSerper(spanishAiNewsQuery(), limit, { news: wantsNews });
+            }
+            if (serper && !/sin resultados/i.test(serper)) {
+                const label = wantsNews ? 'Serper Noticias' : 'Serper';
+                const srcHint = domains.length ? ` · medios ES: ${domains.slice(0, 4).join(', ')}…` : '';
+                return `🌐 Resultados (${label}, es/${searchLocaleGl()}${srcHint}):\n\n${serper}`;
             }
 
-            const tavily = await searchTavily(query, limit);
-            if (tavily) {
-                return `🌐 Resultados (Tavily):\n\n${tavily}`;
+            let tavily = await searchTavily(effectiveQuery, limit, searchOpts);
+            if (tavily && /sin resultados/i.test(tavily) && domains.length > 0) {
+                tavily = await searchTavily(spanishAiNewsQuery(), limit, { news: wantsNews });
+            }
+            if (tavily && !/sin resultados/i.test(tavily)) {
+                const label = wantsNews ? 'Tavily Noticias' : 'Tavily';
+                return `🌐 Resultados (${label}):\n\n${tavily}`;
             }
 
             const ddg = await searchDuckDuckGoInstant(query);
