@@ -18,10 +18,25 @@ function extractText(html: string): string {
 async function fetchWithFirecrawl(url: string, maxChars: number): Promise<string> {
     const { default: FirecrawlApp } = await import('@mendable/firecrawl-js');
     const app = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY! });
-    const result = await app.scrapeUrl(url, { formats: ['markdown'] });
-    if (!result.success) throw new Error(result.error ?? 'Firecrawl: error desconocido');
-    const md = (result as { markdown?: string }).markdown ?? '';
-    const title = (result as { metadata?: { title?: string } }).metadata?.title;
+    const raw = (await app.scrapeUrl(url, { formats: ['markdown'] })) as unknown;
+    const result = raw as {
+        success?: boolean;
+        error?: string;
+        markdown?: string;
+        metadata?: { title?: string };
+        data?: { markdown?: string; metadata?: { title?: string } };
+    };
+
+    // Compatibilidad con versiones viejas y nuevas del SDK.
+    if (result.success === false) {
+        throw new Error(result.error ?? 'Firecrawl: error desconocido');
+    }
+
+    const md = result.markdown ?? result.data?.markdown ?? '';
+    if (!md) {
+        throw new Error(result.error ?? 'Firecrawl no devolvió markdown');
+    }
+    const title = result.metadata?.title ?? result.data?.metadata?.title;
     const header = title ? `# ${title}\n\n` : '';
     const content = `${header}${md}`;
     return content.length > maxChars
