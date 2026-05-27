@@ -74,7 +74,7 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
         'read_inbox',
     ],
     research: [
-        'web_search', 'fetch_url', 'browser_screenshot', 'get_price', 'youtube_transcript',
+        'web_search', 'fetch_url', 'browser_screenshot', 'browser_open', 'browser_fill', 'browser_click', 'browser_submit', 'browser_screenshot_session', 'browser_close', 'get_price', 'youtube_transcript',
     ],
     knowledge: [
         'add_knowledge', 'search_knowledge', 'list_knowledge', 'delete_knowledge',

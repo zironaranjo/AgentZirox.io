@@ -30,6 +30,7 @@ import './linkedin';
 import './generate-image';
 import './fetch-url';
 import './browser-screenshot';
+import './browser-automation';
 import './get-price';
 import './tts-generate';
 import './youtube-transcript';
