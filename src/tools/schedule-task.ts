@@ -70,7 +70,7 @@ registerTool({
             instruction.length > 100 ? `${instruction.slice(0, 100)}…` : instruction;
         const repeatLabel = repeat ? ` · se repite ${repeat === 'daily' ? 'cada día' : repeat === 'weekly' ? 'cada semana' : repeat === 'monthly' ? 'cada mes' : 'cada hora'}` : '';
         return [
-            '✅ Recordatorio programado.',
+            '✅ Pendiente programado.',
             `🕐 ${when} (Madrid)${repeatLabel}`,
             `📌 ${summary}`,
             `🆔 id: ${id}`,
@@ -86,12 +86,13 @@ registerTool({
         const ctx = getToolContext();
         if (!ctx?.chatId) throw new Error('list_scheduled_tasks requiere chat_id (Telegram o WhatsApp)');
         const rows = await listPendingScheduledForChat(ctx.chatId);
-        if (rows.length === 0) return 'No hay tareas pendientes en este chat.';
+        if (rows.length === 0) return 'No tienes pendientes programados.';
         const lines = rows.map((r) => {
             const when = new Date(r.run_at_ms).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
-            return `• id ${r.id} — ${when}\n  ${r.instruction.slice(0, 120)}${r.instruction.length > 120 ? '…' : ''}`;
+            const repeat = r.repeat_interval ? ` 🔁 ${r.repeat_interval}` : '';
+            return `• id ${r.id}${repeat} — 🕐 ${when}\n  ${r.instruction.slice(0, 120)}${r.instruction.length > 120 ? '…' : ''}`;
         });
-        return `📋 Tareas pendientes:\n\n${lines.join('\n\n')}`;
+        return `📅 Pendientes programados (${rows.length}):\n\n${lines.join('\n\n')}`;
     },
 });
 

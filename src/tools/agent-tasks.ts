@@ -122,7 +122,7 @@ registerTool({
             due_at: (args as { due_at?: string }).due_at ?? null,
         });
 
-        return data.message ?? `Tarea guardada: ${title}`;
+        return data.message ?? `✅ Pendiente guardado: ${title}`;
     },
 });
 
@@ -136,9 +136,9 @@ registerTool({
         const data = await callAgentTasksMemory({ action: 'list', chat_id: chatId });
         const tasks = data.tasks ?? [];
         if (tasks.length === 0) {
-            return data.message ?? 'No hay tareas pendientes guardadas en este chat.';
+            return data.message ?? 'No tienes pendientes sin fecha guardados.';
         }
-        return `📋 Tareas guardadas (${tasks.length}):\n\n${tasks.map(formatTaskLine).join('\n\n')}`;
+        return `📝 Pendientes sin fecha (${tasks.length}):\n\n${tasks.map(formatTaskLine).join('\n\n')}`;
     },
 });
 
