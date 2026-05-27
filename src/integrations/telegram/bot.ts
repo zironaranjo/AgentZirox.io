@@ -14,6 +14,7 @@ import { logger } from '../../core/logger';
 import {
     consumePendingTelegramImageCaption,
     consumePendingTelegramImageUrl,
+    consumePendingTelegramImagePath,
 } from '../../tools/generate-image';
 import { consumePendingTelegramAudioCaption, consumePendingTelegramAudioPath } from '../../tools/tts-generate';
 import { cacheImage } from '../../core/image-cache';
@@ -373,6 +374,20 @@ async function sendAgentReplyWithOptionalImage(ctx: Context, chatId: string, res
             }
         } catch (e) {
             logger.warn('No se pudo enviar foto; el texto incluye el enlace.', e);
+        }
+    }
+
+    const imagePath = consumePendingTelegramImagePath(chatId);
+    if (imagePath) {
+        try {
+            const fs = await import('node:fs/promises');
+            const pathMod = await import('node:path');
+            const buf = await fs.readFile(imagePath);
+            const name = pathMod.basename(imagePath) || 'screenshot.png';
+            await ctx.replyWithPhoto(new InputFile(buf, name), { caption: '📸 Screenshot' });
+            await fs.unlink(imagePath).catch(() => {});
+        } catch (e) {
+            logger.warn('No se pudo enviar screenshot.', e);
         }
     }
 

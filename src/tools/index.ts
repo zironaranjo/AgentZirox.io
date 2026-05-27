@@ -29,6 +29,7 @@ import './google-sheets-calendar';
 import './linkedin';
 import './generate-image';
 import './fetch-url';
+import './browser-screenshot';
 import './get-price';
 import './tts-generate';
 import './youtube-transcript';

@@ -74,7 +74,7 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
         'read_inbox',
     ],
     research: [
-        'web_search', 'fetch_url', 'get_price', 'youtube_transcript',
+        'web_search', 'fetch_url', 'browser_screenshot', 'get_price', 'youtube_transcript',
     ],
     knowledge: [
         'add_knowledge', 'search_knowledge', 'list_knowledge', 'delete_knowledge',
@@ -125,6 +125,7 @@ export function classifyDomain(msg: string): Domain {
     if (/\b(calendario|agenda|evento|recordatorio|tarea|task|cita|horario|sheets?|hoja\s+de\s+c[aá]lculo|carpeta|directorio|archivo\s+(nuevo|crear)|escrib[ei]r\s+archivo|nota|apunte|workspace|recuérdame|recuerdame|av[ií]same|en\s+\d+\s+(minutos?|horas?)|mañana\s+a\s+las|esta\s+tarde\s+a\s+las|pendiente|lista.*tareas|que\s+tengo\s+pendiente)\b/.test(t)) return 'productivity';
     if (/\b(cancela|cancelar|borra|borrar|elimina|eliminar)\b/.test(t) && /\b(recordatorio|tarea|task|id|pendiente)\b/.test(t)) return 'productivity';
 
+    if (/\b(screenshot|captura\s+(de\s+)?pantalla|captura\s+(la\s+)?web|c[oó]mo\s+se\s+ve|foto\s+de\s+la\s+web|toma\s+una\s+captura)\b/.test(t)) return 'research';
     if (/\b(busca|investiga|precio|cu[aá]nto\s+(cuesta|vale|cuestan)|qu[eé]\s+es|d[oó]nde\s+(est[aá]|comprar)|p[aá]gina\s+web|url|noticias|informaci[oó]n\s+sobre)\b/.test(t)) return 'research';
 
     if (/\b(añade\s+conocimiento|guarda.*conocimiento|base\s+de\s+conocimiento|aprende|nuevo\s+conocimiento|conocimiento\s+sobre)\b/.test(t)) return 'knowledge';

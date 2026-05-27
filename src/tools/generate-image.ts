@@ -32,6 +32,19 @@ export function setPendingTelegramImageCaption(chatId: string, caption: string):
     pendingTelegramImageCaption.set(chatId, caption.slice(0, 900));
 }
 
+/** Ruta local de imagen (ej. screenshot) para enviar como foto en Telegram. */
+const pendingTelegramImagePath = new Map<string, string>();
+
+export function consumePendingTelegramImagePath(chatId: string): string | undefined {
+    const p = pendingTelegramImagePath.get(chatId);
+    if (p) pendingTelegramImagePath.delete(chatId);
+    return p;
+}
+
+export function setPendingTelegramImagePath(chatId: string, filePath: string): void {
+    pendingTelegramImagePath.set(chatId, filePath);
+}
+
 function sleep(ms: number): Promise<void> {
     return new Promise((r) => setTimeout(r, ms));
 }

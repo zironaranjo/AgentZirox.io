@@ -17,6 +17,7 @@
     "@antv/infographic": "^0.2.16",
     "@mendable/firecrawl-js": "^4.25.0",
     "@modelcontextprotocol/sdk": "^1.5.0",
+    "@playwright/cli": "^0.1.13",
     "@supabase/supabase-js": "^2.104.1",
     "better-sqlite3": "^11.0.0",
     "dotenv": "^16.4.5",
