@@ -15,6 +15,43 @@ function extractText(html: string): string {
         .trim();
 }
 
+async function fetchWithFirecrawl(url: string, maxChars: number): Promise<string> {
+    const { default: FirecrawlApp } = await import('@mendable/firecrawl-js');
+    const app = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY! });
+    const result = await app.scrapeUrl(url, { formats: ['markdown'] });
+    if (!result.success) throw new Error(result.error ?? 'Firecrawl: error desconocido');
+    const md = (result as { markdown?: string }).markdown ?? '';
+    const title = (result as { metadata?: { title?: string } }).metadata?.title;
+    const header = title ? `# ${title}\n\n` : '';
+    const content = `${header}${md}`;
+    return content.length > maxChars
+        ? `${content.slice(0, maxChars)}…\n\n_(truncado — ${content.length} chars totales)_`
+        : content;
+}
+
+async function fetchWithBasic(url: string, maxChars: number): Promise<string> {
+    const res = await fetch(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; AgenteZirox/1.0)',
+            Accept: 'text/html,application/xhtml+xml,*/*',
+        },
+        redirect: 'follow',
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} al acceder a ${url}`);
+
+    const contentType = res.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+        const json = await res.text();
+        return `📄 JSON de ${url}:\n\n${json.slice(0, maxChars)}`;
+    }
+
+    const html = await res.text();
+    const text = extractText(html);
+    return text.length > maxChars
+        ? `${text.slice(0, maxChars)}…\n\n_(truncado — ${text.length} chars totales)_`
+        : text;
+}
+
 registerTool({
     name: 'fetch_url',
     description:
@@ -35,29 +72,19 @@ registerTool({
         const maxChars = Math.min(Number(args.max_chars ?? 4000), 8000);
         if (!url.startsWith('http')) throw new Error('URL debe empezar por http:// o https://');
 
-        const res = await fetch(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; AgenteZirox/1.0)',
-                Accept: 'text/html,application/xhtml+xml,*/*',
-            },
-            redirect: 'follow',
-        });
-
-        if (!res.ok) throw new Error(`HTTP ${res.status} al acceder a ${url}`);
-
-        const contentType = res.headers.get('content-type') ?? '';
-        if (contentType.includes('application/json')) {
-            const json = await res.text();
-            return `📄 JSON de ${url}:\n\n${json.slice(0, maxChars)}`;
+        const apiKey = process.env.FIRECRAWL_API_KEY?.trim();
+        try {
+            const content = apiKey
+                ? await fetchWithFirecrawl(url, maxChars)
+                : await fetchWithBasic(url, maxChars);
+            return `📄 Contenido de ${url}:\n\n${content}`;
+        } catch (err) {
+            if (apiKey) {
+                // Firecrawl falló → fallback a fetch básico
+                const content = await fetchWithBasic(url, maxChars);
+                return `📄 Contenido de ${url}:\n\n${content}`;
+            }
+            throw err;
         }
-
-        const html = await res.text();
-        const text = extractText(html);
-        const preview =
-            text.length > maxChars
-                ? `${text.slice(0, maxChars)}…\n\n_(truncado — ${text.length} chars totales)_`
-                : text;
-
-        return `📄 Contenido de ${url}:\n\n${preview}`;
     },
 });

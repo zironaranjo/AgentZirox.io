@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@antv/infographic": "^0.2.16",
+    "@mendable/firecrawl-js": "^4.25.0",
     "@modelcontextprotocol/sdk": "^1.5.0",
     "@supabase/supabase-js": "^2.104.1",
     "better-sqlite3": "^11.0.0",
