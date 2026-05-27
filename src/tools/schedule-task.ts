@@ -31,6 +31,12 @@ registerTool({
                 description:
                     'Momento de ejecución en ISO 8601 con offset explícito de España, ej. 2026-04-23T08:00:00+02:00',
             },
+            repeat: {
+                type: 'string',
+                enum: ['hourly', 'daily', 'weekly', 'monthly'],
+                description:
+                    'Si se indica, la tarea se reprograma automáticamente tras cada ejecución. "daily" = cada 24h, "weekly" = cada 7 días, "monthly" = cada mes.',
+            },
         },
         required: ['instruction', 'run_at_iso'],
     },
@@ -39,8 +45,10 @@ registerTool({
         if (!ctx?.chatId) {
             throw new Error('schedule_task requiere un chat_id (Telegram o WhatsApp)');
         }
-        const instruction = String((args as { instruction?: string }).instruction ?? '').trim();
-        const runAtIso = String((args as { run_at_iso?: string }).run_at_iso ?? '').trim();
+        const a = args as { instruction?: string; run_at_iso?: string; repeat?: string };
+        const instruction = String(a.instruction ?? '').trim();
+        const runAtIso = String(a.run_at_iso ?? '').trim();
+        const repeat = a.repeat?.trim() || null;
         if (!instruction) throw new Error('instruction vacío');
 
         const runAtMs = parseRunAtMs(runAtIso);
@@ -52,7 +60,7 @@ registerTool({
             );
         }
 
-        const id = await insertScheduledTask(ctx.chatId, instruction, runAtMs);
+        const id = await insertScheduledTask(ctx.chatId, instruction, runAtMs, repeat);
         const when = new Date(runAtMs).toLocaleString('es-ES', {
             timeZone: 'Europe/Madrid',
             dateStyle: 'short',
@@ -60,9 +68,10 @@ registerTool({
         });
         const summary =
             instruction.length > 100 ? `${instruction.slice(0, 100)}…` : instruction;
+        const repeatLabel = repeat ? ` · se repite ${repeat === 'daily' ? 'cada día' : repeat === 'weekly' ? 'cada semana' : repeat === 'monthly' ? 'cada mes' : 'cada hora'}` : '';
         return [
             '✅ Recordatorio programado.',
-            `🕐 ${when} (Madrid)`,
+            `🕐 ${when} (Madrid)${repeatLabel}`,
             `📌 ${summary}`,
             `🆔 id: ${id}`,
         ].join('\n');

@@ -122,11 +122,12 @@ export async function supabaseGetMeta(key: string): Promise<string | null> {
 export async function supabaseInsertScheduledTask(
     chatId: string,
     instruction: string,
-    runAtMs: number
+    runAtMs: number,
+    repeatInterval?: string | null
 ): Promise<number> {
     const { data, error } = await getClient()
         .from('scheduled_tasks')
-        .insert({ chat_id: chatId, instruction, run_at_ms: runAtMs, status: 'pending' })
+        .insert({ chat_id: chatId, instruction, run_at_ms: runAtMs, status: 'pending', repeat_interval: repeatInterval ?? null })
         .select('id')
         .single();
     if (error) throw new Error(`Supabase insertScheduledTask: ${error.message}`);
@@ -136,7 +137,7 @@ export async function supabaseInsertScheduledTask(
 export async function supabaseListPendingScheduledForChat(chatId: string): Promise<ScheduledTaskRow[]> {
     const { data, error } = await getClient()
         .from('scheduled_tasks')
-        .select('id, chat_id, instruction, run_at_ms, status, created_at')
+        .select('id, chat_id, instruction, run_at_ms, status, repeat_interval, created_at')
         .eq('chat_id', chatId)
         .eq('status', 'pending')
         .order('run_at_ms', { ascending: true });
@@ -151,6 +152,7 @@ function mapScheduledRow(r: Record<string, unknown>): ScheduledTaskRow {
         instruction: String(r.instruction),
         run_at_ms: num(r.run_at_ms),
         status: String(r.status),
+        repeat_interval: r.repeat_interval ? String(r.repeat_interval) : null,
         created_at: isoCreatedAt(r.created_at),
     };
 }

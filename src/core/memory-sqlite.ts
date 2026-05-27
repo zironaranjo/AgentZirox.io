@@ -31,6 +31,7 @@ export async function initSqliteMemory(): Promise<void> {
       instruction TEXT NOT NULL,
       run_at_ms INTEGER NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'done', 'failed')),
+      repeat_interval TEXT CHECK(repeat_interval IN ('hourly', 'daily', 'weekly', 'monthly')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_sched_due ON scheduled_tasks(status, run_at_ms);
@@ -60,6 +61,11 @@ export async function initSqliteMemory(): Promise<void> {
   `);
     try {
         db.exec(`ALTER TABLE linkedin_pending_posts ADD COLUMN image_url TEXT`);
+    } catch {
+        /* columna ya existe */
+    }
+    try {
+        db.exec(`ALTER TABLE scheduled_tasks ADD COLUMN repeat_interval TEXT CHECK(repeat_interval IN ('hourly', 'daily', 'weekly', 'monthly'))`);
     } catch {
         /* columna ya existe */
     }
@@ -117,22 +123,23 @@ export type ScheduledTaskRow = {
     instruction: string;
     run_at_ms: number;
     status: string;
+    repeat_interval?: string | null;
     created_at: string;
 };
 
-export function sqliteInsertScheduledTask(chatId: string, instruction: string, runAtMs: number): number {
+export function sqliteInsertScheduledTask(chatId: string, instruction: string, runAtMs: number, repeatInterval?: string | null): number {
     const r = sqliteGetDb()
         .prepare(
-            `INSERT INTO scheduled_tasks (chat_id, instruction, run_at_ms, status) VALUES (?, ?, ?, 'pending')`
+            `INSERT INTO scheduled_tasks (chat_id, instruction, run_at_ms, status, repeat_interval) VALUES (?, ?, ?, 'pending', ?)`
         )
-        .run(chatId, instruction, runAtMs);
+        .run(chatId, instruction, runAtMs, repeatInterval ?? null);
     return Number(r.lastInsertRowid);
 }
 
 export function sqliteListPendingScheduledForChat(chatId: string): ScheduledTaskRow[] {
     return sqliteGetDb()
         .prepare(
-            `SELECT id, chat_id, instruction, run_at_ms, status, created_at FROM scheduled_tasks
+            `SELECT id, chat_id, instruction, run_at_ms, status, repeat_interval, created_at FROM scheduled_tasks
              WHERE chat_id = ? AND status = 'pending' ORDER BY run_at_ms ASC`
         )
         .all(chatId) as ScheduledTaskRow[];
@@ -143,7 +150,7 @@ export function sqliteClaimNextDueScheduledTask(nowMs: number): ScheduledTaskRow
     const txn = database.transaction(() => {
         const row = database
             .prepare(
-                `SELECT id, chat_id, instruction, run_at_ms, status, created_at FROM scheduled_tasks
+                `SELECT id, chat_id, instruction, run_at_ms, status, repeat_interval, created_at FROM scheduled_tasks
                  WHERE status = 'pending' AND run_at_ms <= ? ORDER BY run_at_ms ASC LIMIT 1`
             )
             .get(nowMs) as ScheduledTaskRow | undefined;

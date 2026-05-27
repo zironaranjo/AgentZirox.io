@@ -235,9 +235,9 @@ export async function appendUserProfileNote(note: string): Promise<void> {
     await setMeta(META_USER_PROFILE, next);
 }
 
-export async function insertScheduledTask(chatId: string, instruction: string, runAtMs: number): Promise<number> {
-    if (b() === 'supabase') return supabaseInsertScheduledTask(chatId, instruction, runAtMs);
-    return sqliteInsertScheduledTask(chatId, instruction, runAtMs);
+export async function insertScheduledTask(chatId: string, instruction: string, runAtMs: number, repeatInterval?: string | null): Promise<number> {
+    if (b() === 'supabase') return supabaseInsertScheduledTask(chatId, instruction, runAtMs, repeatInterval);
+    return sqliteInsertScheduledTask(chatId, instruction, runAtMs, repeatInterval);
 }
 
 export async function listPendingScheduledForChat(chatId: string): Promise<ScheduledTaskRow[]> {

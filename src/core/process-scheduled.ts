@@ -1,6 +1,7 @@
 import { processMessage } from './agent';
 import {
     claimNextDueScheduledTask,
+    insertScheduledTask,
     markScheduledTaskDone,
     markScheduledTaskFailed,
     releaseStuckRunningTasks,
@@ -61,6 +62,17 @@ function splitIntoChunks(text: string, maxLen: number): string[] {
 function scheduledTasksEnabled(): boolean {
     const v = (process.env.SCHEDULED_TASKS_ENABLED ?? '').toLowerCase();
     return v === 'true' || v === '1' || v === 'yes';
+}
+
+function nextRepeatMs(runAtMs: number, interval: string): number {
+    const d = new Date(runAtMs);
+    switch (interval) {
+        case 'hourly':  return runAtMs + 3_600_000;
+        case 'daily':   return runAtMs + 86_400_000;
+        case 'weekly':  return runAtMs + 7 * 86_400_000;
+        case 'monthly': d.setMonth(d.getMonth() + 1); return d.getTime();
+        default:        return runAtMs + 86_400_000;
+    }
 }
 
 function buildScheduledPrompt(instruction: string): string {
@@ -126,6 +138,11 @@ export async function tickScheduledTasksInternal(): Promise<{ processed: number;
                 const header = isNews ? '📰 *Noticias IA*' : '🔔 *Recordatorio*';
                 await deliverScheduledReply(task.chat_id, `${header}\n\n${short}`);
                 await markScheduledTaskDone(task.id);
+                if (task.repeat_interval) {
+                    const nextMs = nextRepeatMs(task.run_at_ms, task.repeat_interval);
+                    await insertScheduledTask(task.chat_id, task.instruction, nextMs, task.repeat_interval);
+                    logger.info(`[scheduled] task ${task.id} rescheduled (${task.repeat_interval}) → ${new Date(nextMs).toISOString()}`);
+                }
                 processed++;
                 logger.info(`[scheduled] completed task ${task.id} for chat ${task.chat_id}`);
             } catch (err) {
