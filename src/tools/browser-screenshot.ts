@@ -28,6 +28,26 @@ async function runPwCli(session: string, ...args: string[]): Promise<string> {
     }
 }
 
+async function takeScreenshotDirect(url: string, screenshotPath: string): Promise<void> {
+    const { chromium } = await import('playwright');
+    const browser = await chromium.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+    try {
+        const context = await browser.newContext({
+            viewport: { width: 1440, height: 2200 },
+        });
+        const page = await context.newPage();
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 35_000 });
+        await page.waitForTimeout(1200);
+        await page.screenshot({ path: screenshotPath, fullPage: true });
+        await context.close();
+    } finally {
+        await browser.close();
+    }
+}
+
 function normalizeUrl(input: string): string {
     let raw = input.trim().replace(/^["'`]+|["'`]+$/g, '');
     // El usuario suele dictar "triadak.io/explore" sin esquema.
@@ -64,8 +84,18 @@ registerTool({
         const screenshotPath = path.join(tmpdir(), `screenshot-${Date.now()}.png`);
 
         try {
-            await runPwCli(session, 'open', url);
-            await runPwCli(session, 'screenshot', `--filename=${screenshotPath}`);
+            // Ruta principal: Playwright oficial (más estable en contenedor).
+            await takeScreenshotDirect(url, screenshotPath);
+        } catch (directErr) {
+            // Fallback: playwright-cli por si hay entornos legacy.
+            try {
+                await runPwCli(session, 'open', url);
+                await runPwCli(session, 'screenshot', `--filename=${screenshotPath}`);
+            } catch (cliErr) {
+                const dmsg = directErr instanceof Error ? directErr.message : String(directErr);
+                const cmsg = cliErr instanceof Error ? cliErr.message : String(cliErr);
+                throw new Error(`screenshot falló (playwright + cli): ${dmsg.slice(0, 180)} | ${cmsg.slice(0, 180)}`);
+            }
         } finally {
             await runPwCli(session, 'close').catch(() => {});
         }
