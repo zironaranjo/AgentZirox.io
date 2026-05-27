@@ -1,5 +1,6 @@
 import { registerTool } from '../core/dispatcher';
 import { getToolContext } from '../core/tool-context';
+import { buildDuplicateReport, buildListAllPending, buildListDailyPending } from '../core/pending-format';
 import { listPendingScheduledForChat } from '../core/memory';
 
 const DEFAULT_WEBHOOK =
@@ -191,6 +192,17 @@ registerTool({
     },
 });
 
+export async function loadPendingData(chatId: string): Promise<{
+    scheduled: Awaited<ReturnType<typeof listPendingScheduledForChat>>;
+    agentTasks: AgentTaskRow[];
+}> {
+    const [scheduled, agentData] = await Promise.all([
+        listPendingScheduledForChat(chatId),
+        callAgentTasksMemory({ action: 'list', chat_id: chatId }),
+    ]);
+    return { scheduled, agentTasks: agentData.tasks ?? [] };
+}
+
 registerTool({
     name: 'list_all_pending',
     description:
@@ -201,31 +213,7 @@ registerTool({
         if (!ctx?.chatId) throw new Error('list_all_pending requiere chat_id');
         const chatId = ctx.chatId;
 
-        const [scheduled, agentData] = await Promise.all([
-            listPendingScheduledForChat(chatId),
-            callAgentTasksMemory({ action: 'list', chat_id: chatId }),
-        ]);
-
-        const parts: string[] = [];
-
-        if (scheduled.length > 0) {
-            const lines = scheduled.map((r) => {
-                const when = new Date(r.run_at_ms).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
-                const repeat = r.repeat_interval ? ` 🔁 ${r.repeat_interval}` : '';
-                return `• id ${r.id}${repeat} — 🕐 ${when}\n  ${r.instruction.slice(0, 120)}${r.instruction.length > 120 ? '…' : ''}`;
-            });
-            parts.push(`📅 Pendientes programados (${scheduled.length}):\n\n${lines.join('\n\n')}`);
-        } else {
-            parts.push('📅 No tienes pendientes programados.');
-        }
-
-        const tasks = agentData.tasks ?? [];
-        if (tasks.length > 0) {
-            parts.push(`📝 Pendientes sin fecha (${tasks.length}):\n\n${tasks.map(formatTaskLine).join('\n\n')}`);
-        } else {
-            parts.push('📝 No tienes pendientes sin fecha.');
-        }
-
-        return parts.join('\n\n---\n\n');
+        const { scheduled, agentTasks } = await loadPendingData(chatId);
+        return buildListAllPending(scheduled, agentTasks);
     },
 });

@@ -36,6 +36,14 @@ export interface IntentListAllPending {
     type: 'list_all_pending';
 }
 
+export interface IntentListDailyPending {
+    type: 'list_daily_pending';
+}
+
+export interface IntentCheckDuplicatePending {
+    type: 'check_duplicate_pending';
+}
+
 export interface IntentFetchUrl {
     type: 'fetch_url';
     url: string;
@@ -66,6 +74,8 @@ export type Intent =
     | IntentGetSavedAudio
     | IntentListAudios
     | IntentListAllPending
+    | IntentListDailyPending
+    | IntentCheckDuplicatePending
     | IntentFetchUrl
     | IntentApproveLinkedIn
     | IntentApproveTikTok
@@ -186,7 +196,23 @@ export function routeIntent(
         return { type: 'get_saved_audio', query };
     }
 
-    // ── 10. Lista unificada de pendientes (programados + sin fecha) ──────────
+    // ── 10. Duplicados en pendientes ─────────────────────────────────────────
+    if (
+        /\b(repetid[ao]s?|duplicad[ao]s?|hay\s+alguna\s+repetida|ves\s+alguna\s+repetida)\b/i.test(msg) ||
+        /\b(hay|tienes|tiene)\b.{0,20}\b(duplicad|repetid)/i.test(msg)
+    ) {
+        return { type: 'check_duplicate_pending' };
+    }
+
+    // ── 11. Tareas diarias ───────────────────────────────────────────────────
+    if (
+        /\b(tareas?\s+)?diarias?\b/i.test(msg) ||
+        /\b(qu[eé]|que)\s+tareas?\s+(diarias?|tienes)\b/i.test(msg)
+    ) {
+        return { type: 'list_daily_pending' };
+    }
+
+    // ── 12. Lista unificada de pendientes (programados + sin fecha) ──────────
     if (
         /\b(lista|listar|muestra|ver|ens[eé]ñame|dime)\b.{0,30}\b(pendientes|tareas|recordatorios)\b/i.test(msg) ||
         /\b(qu[eé]|que)\b.{0,24}\b(tengo)\b.{0,24}\b(pendiente|pendientes|recordatorios?)\b/i.test(msg) ||
@@ -195,7 +221,7 @@ export function routeIntent(
         return { type: 'list_all_pending' };
     }
 
-    // ── 11. Resumir/leer URL — ruta directa a fetch_url ─────────────────────
+    // ── 13. Resumir/leer URL — ruta directa a fetch_url ─────────────────────
     if (/\b(resume|resumir|lee|leer|analiza|explica)\b.{0,30}\b(p[aá]gina|enlace|url|art[ií]culo)\b/i.test(msg)) {
         const m = msg.match(/https?:\/\/[^\s"')\]]+/i);
         if (m?.[0]) {

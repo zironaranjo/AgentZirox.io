@@ -9,6 +9,8 @@ import { detectTaskHallucination, requiresTaskAction, taskActionRetryHint } from
 
 // Bootstrap all tools on first import
 import '../tools/index';
+import { loadPendingData } from '../tools/agent-tasks';
+import { buildDuplicateReport, buildListDailyPending } from './pending-format';
 
 /**
  * Main agent loop: processes a user message and returns the assistant's response.
@@ -121,6 +123,18 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         }
         case 'list_all_pending': {
             const result = await executeTool('list_all_pending', {});
+            await saveMessage(chatId, 'assistant', result);
+            return result;
+        }
+        case 'list_daily_pending': {
+            const { scheduled } = await loadPendingData(chatId);
+            const result = buildListDailyPending(scheduled);
+            await saveMessage(chatId, 'assistant', result);
+            return result;
+        }
+        case 'check_duplicate_pending': {
+            const { scheduled, agentTasks } = await loadPendingData(chatId);
+            const result = buildDuplicateReport(scheduled, agentTasks);
             await saveMessage(chatId, 'assistant', result);
             return result;
         }
