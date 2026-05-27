@@ -1,6 +1,6 @@
 import Groq from 'groq-sdk';
 import OpenAI from 'openai';
-import { getUserProfileBlock, getUserContextBlock, listPendingScheduledForChat, listLinkedInPendingPostsForChat } from './memory';
+import { getUserProfileBlock, getUserContextBlock, listLinkedInPendingPostsForChat } from './memory';
 import { getToolContext } from './tool-context';
 import { logger } from './logger';
 
@@ -84,22 +84,8 @@ export async function buildSystemPrompt(): Promise<string> {
     const [profile, userContext] = await Promise.all([getUserProfileBlock(), getUserContextBlock()]);
     const now = new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
 
-    let pendingTasksBlock = '';
+    const pendingTasksBlock = '';
     const ctx = getToolContext();
-    if (ctx?.chatId) {
-        try {
-            const tasks = await listPendingScheduledForChat(ctx.chatId);
-            if (tasks.length > 0) {
-                const lines = tasks.map((t) => {
-                    const when = new Date(t.run_at_ms).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
-                    return `• [id:${t.id}] ${when} → ${t.instruction.slice(0, 150)}${t.instruction.length > 150 ? '…' : ''}`;
-                });
-                pendingTasksBlock = `\n\n---\n### Tareas programadas pendientes\n${lines.join('\n')}`;
-            }
-        } catch {
-            /* ignorar si la DB no está lista */
-        }
-    }
 
     let pendingLinkedInBlock = '';
     if (ctx?.chatId) {
