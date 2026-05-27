@@ -49,6 +49,11 @@ export interface IntentFetchUrl {
     url: string;
 }
 
+export interface IntentBrowserScreenshot {
+    type: 'browser_screenshot';
+    url: string;
+}
+
 export interface IntentApproveLinkedIn {
     type: 'approve_linkedin';
     postId?: number;
@@ -77,6 +82,7 @@ export type Intent =
     | IntentListDailyPending
     | IntentCheckDuplicatePending
     | IntentFetchUrl
+    | IntentBrowserScreenshot
     | IntentApproveLinkedIn
     | IntentApproveTikTok
     | IntentLLM;
@@ -221,7 +227,15 @@ export function routeIntent(
         return { type: 'list_all_pending' };
     }
 
-    // ── 13. Resumir/leer URL — ruta directa a fetch_url ─────────────────────
+    // ── 13. Screenshot de URL — ruta directa a browser_screenshot ───────────
+    if (/\b(screenshot|captura\s+(de\s+)?pantalla|captura\s+(la\s+)?web|foto\s+de\s+la\s+web|toma\s+una\s+captura)\b/i.test(msg)) {
+        const m = msg.match(/(?:https?:\/\/)?[a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s"')\]]*)?/i);
+        if (m?.[0]) {
+            return { type: 'browser_screenshot', url: m[0].trim() };
+        }
+    }
+
+    // ── 14. Resumir/leer URL — ruta directa a fetch_url ─────────────────────
     if (/\b(resume|resumir|lee|leer|analiza|explica)\b.{0,30}\b(p[aá]gina|enlace|url|art[ií]culo)\b/i.test(msg)) {
         const m = msg.match(/https?:\/\/[^\s"')\]]+/i);
         if (m?.[0]) {

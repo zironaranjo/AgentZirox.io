@@ -28,6 +28,21 @@ async function runPwCli(session: string, ...args: string[]): Promise<string> {
     }
 }
 
+function normalizeUrl(input: string): string {
+    let raw = input.trim().replace(/^["'`]+|["'`]+$/g, '');
+    // El usuario suele dictar "triadak.io/explore" sin esquema.
+    if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
+    let u: URL;
+    try {
+        u = new URL(raw);
+    } catch {
+        throw new Error(`URL inválida: "${input}"`);
+    }
+    // Limpia comillas residuales o espacios codificados en el path.
+    u.pathname = u.pathname.replace(/["'`]+$/g, '').replace(/\s+$/g, '');
+    return u.toString();
+}
+
 registerTool({
     name: 'browser_screenshot',
     description:
@@ -41,8 +56,9 @@ registerTool({
     },
     timeoutMs: 45_000,
     handler: async (args) => {
-        const url = String((args as { url?: string }).url ?? '').trim();
-        if (!url.startsWith('http')) throw new Error('URL debe empezar por https://');
+        const urlRaw = String((args as { url?: string }).url ?? '').trim();
+        if (!urlRaw) throw new Error('URL vacía');
+        const url = normalizeUrl(urlRaw);
 
         const session = `agent-${Date.now()}`;
         const screenshotPath = path.join(tmpdir(), `screenshot-${Date.now()}.png`);

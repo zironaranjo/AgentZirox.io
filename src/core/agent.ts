@@ -157,6 +157,13 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
             await saveMessage(chatId, 'assistant', result);
             return result;
         }
+        case 'browser_screenshot': {
+            const rawUrl = intent.url.trim().replace(/^["'`]+|["'`]+$/g, '');
+            const withScheme = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+            const result = await executeTool('browser_screenshot', { url: withScheme });
+            await saveMessage(chatId, 'assistant', result);
+            return result;
+        }
         case 'approve_linkedin': {
             logger.info(`[agent] approve_linkedin${intent.postId ? ` postId=${intent.postId}` : ''}`);
             const args = intent.postId ? { post_id: intent.postId } : {};
