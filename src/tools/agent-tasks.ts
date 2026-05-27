@@ -1,5 +1,6 @@
 import { registerTool } from '../core/dispatcher';
 import { getToolContext } from '../core/tool-context';
+import { listPendingScheduledForChat } from '../core/memory';
 
 const DEFAULT_WEBHOOK =
     'https://ziroxxn8n.ziroxn8n.site/webhook/agent-tareas-memoria';
@@ -187,5 +188,44 @@ registerTool({
             task_id: taskId,
         });
         return data.message ?? `Tarea ${taskId} cancelada.`;
+    },
+});
+
+registerTool({
+    name: 'list_all_pending',
+    description:
+        'Lista TODOS los pendientes del usuario: programados (con fecha/hora) y sin fecha (backlog). Úsala cuando el usuario diga "lista mis pendientes", "qué tengo pendiente", "mis recordatorios", "qué hay en mi lista" o similar. Devuelve ambas listas unificadas en un solo bloque.',
+    parameters: { type: 'object', properties: {}, required: [] },
+    handler: async () => {
+        const ctx = getToolContext();
+        if (!ctx?.chatId) throw new Error('list_all_pending requiere chat_id');
+        const chatId = ctx.chatId;
+
+        const [scheduled, agentData] = await Promise.all([
+            listPendingScheduledForChat(chatId),
+            callAgentTasksMemory({ action: 'list', chat_id: chatId }),
+        ]);
+
+        const parts: string[] = [];
+
+        if (scheduled.length > 0) {
+            const lines = scheduled.map((r) => {
+                const when = new Date(r.run_at_ms).toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
+                const repeat = r.repeat_interval ? ` 🔁 ${r.repeat_interval}` : '';
+                return `• id ${r.id}${repeat} — 🕐 ${when}\n  ${r.instruction.slice(0, 120)}${r.instruction.length > 120 ? '…' : ''}`;
+            });
+            parts.push(`📅 Pendientes programados (${scheduled.length}):\n\n${lines.join('\n\n')}`);
+        } else {
+            parts.push('📅 No tienes pendientes programados.');
+        }
+
+        const tasks = agentData.tasks ?? [];
+        if (tasks.length > 0) {
+            parts.push(`📝 Pendientes sin fecha (${tasks.length}):\n\n${tasks.map(formatTaskLine).join('\n\n')}`);
+        } else {
+            parts.push('📝 No tienes pendientes sin fecha.');
+        }
+
+        return parts.join('\n\n---\n\n');
     },
 });
