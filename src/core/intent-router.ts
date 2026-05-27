@@ -36,6 +36,11 @@ export interface IntentListAllPending {
     type: 'list_all_pending';
 }
 
+export interface IntentFetchUrl {
+    type: 'fetch_url';
+    url: string;
+}
+
 export interface IntentApproveLinkedIn {
     type: 'approve_linkedin';
     postId?: number;
@@ -61,6 +66,7 @@ export type Intent =
     | IntentGetSavedAudio
     | IntentListAudios
     | IntentListAllPending
+    | IntentFetchUrl
     | IntentApproveLinkedIn
     | IntentApproveTikTok
     | IntentLLM;
@@ -187,6 +193,14 @@ export function routeIntent(
         /^lista\s+pendientes[\s.!?]*$/i.test(msg)
     ) {
         return { type: 'list_all_pending' };
+    }
+
+    // ── 11. Resumir/leer URL — ruta directa a fetch_url ─────────────────────
+    if (/\b(resume|resumir|lee|leer|analiza|explica)\b.{0,30}\b(p[aá]gina|enlace|url|art[ií]culo)\b/i.test(msg)) {
+        const m = msg.match(/https?:\/\/[^\s"')\]]+/i);
+        if (m?.[0]) {
+            return { type: 'fetch_url', url: m[0].trim() };
+        }
     }
 
     // ── Default: LLM ─────────────────────────────────────────────────────────

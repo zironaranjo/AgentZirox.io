@@ -124,6 +124,25 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
             await saveMessage(chatId, 'assistant', result);
             return result;
         }
+        case 'fetch_url': {
+            const rawUrl = intent.url.trim();
+            let parsed: URL;
+            try {
+                parsed = new URL(rawUrl);
+            } catch {
+                const msg = `El enlace parece incompleto o inválido: "${rawUrl}". Pásame la URL completa (https://...) y te la resumo.`;
+                await saveMessage(chatId, 'assistant', msg);
+                return msg;
+            }
+            if (!parsed.hostname || parsed.pathname === '/' || parsed.pathname.length < 3) {
+                const msg = `El enlace parece incompleto: "${rawUrl}". Pásame la URL completa del artículo y te lo resumo.`;
+                await saveMessage(chatId, 'assistant', msg);
+                return msg;
+            }
+            const result = await executeTool('fetch_url', { url: rawUrl, max_chars: 5000 });
+            await saveMessage(chatId, 'assistant', result);
+            return result;
+        }
         case 'approve_linkedin': {
             logger.info(`[agent] approve_linkedin${intent.postId ? ` postId=${intent.postId}` : ''}`);
             const args = intent.postId ? { post_id: intent.postId } : {};
