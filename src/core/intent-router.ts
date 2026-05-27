@@ -32,6 +32,10 @@ export interface IntentListAudios {
     limit?: number;
 }
 
+export interface IntentListAllPending {
+    type: 'list_all_pending';
+}
+
 export interface IntentApproveLinkedIn {
     type: 'approve_linkedin';
     postId?: number;
@@ -56,6 +60,7 @@ export type Intent =
     | IntentGetSavedImage
     | IntentGetSavedAudio
     | IntentListAudios
+    | IntentListAllPending
     | IntentApproveLinkedIn
     | IntentApproveTikTok
     | IntentLLM;
@@ -173,6 +178,15 @@ export function routeIntent(
             msg.match(/(?:ponme|muéstrame|muestrame|dame|tráeme|traeme|envíame|enviame)\s+(?:el\s+)?(?:audio|mp3)\s+(?:de\s+)?["']?([^"']+)["']?/i);
         const query = (queryMatch?.[1] ?? msg).replace(/["'.!?]+$/g, '').trim();
         return { type: 'get_saved_audio', query };
+    }
+
+    // ── 10. Lista unificada de pendientes (programados + sin fecha) ──────────
+    if (
+        /\b(lista|listar|muestra|ver|ens[eé]ñame|dime)\b.{0,30}\b(pendientes|tareas|recordatorios)\b/i.test(msg) ||
+        /\b(qu[eé]|que)\b.{0,24}\b(tengo)\b.{0,24}\b(pendiente|pendientes|recordatorios?)\b/i.test(msg) ||
+        /^lista\s+pendientes[\s.!?]*$/i.test(msg)
+    ) {
+        return { type: 'list_all_pending' };
     }
 
     // ── Default: LLM ─────────────────────────────────────────────────────────

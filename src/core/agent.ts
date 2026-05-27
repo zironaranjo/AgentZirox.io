@@ -119,6 +119,11 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
             await saveMessage(chatId, 'assistant', result);
             return result;
         }
+        case 'list_all_pending': {
+            const result = await executeTool('list_all_pending', {});
+            await saveMessage(chatId, 'assistant', result);
+            return result;
+        }
         case 'approve_linkedin': {
             logger.info(`[agent] approve_linkedin${intent.postId ? ` postId=${intent.postId}` : ''}`);
             const args = intent.postId ? { post_id: intent.postId } : {};
