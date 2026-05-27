@@ -7,6 +7,7 @@ const outfit = Outfit({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Ziro - Sistema Central",
   description: "Personal AI Agent — Terminal Neuronal Segura",
+  icons: { icon: "/avatar.png" },
 };
 
 export default function RootLayout({
