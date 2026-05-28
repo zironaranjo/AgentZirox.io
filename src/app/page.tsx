@@ -32,6 +32,10 @@ export default function Home() {
   const messagesEndRef              = useRef<HTMLDivElement>(null);
   const recogRef                    = useRef<any>(null);
   const speakTimerRef               = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canvasRef                   = useRef<HTMLCanvasElement>(null);
+  const rotYRef                     = useRef(0);
+  const primaryColorRef             = useRef(COLORS.idle.primary);
+  const isActiveRef                 = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -57,6 +61,90 @@ export default function Home() {
   useEffect(() => {
     if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
   }, []);
+
+  // Keep refs in sync with state (avoids restarting the canvas loop)
+  useEffect(() => { primaryColorRef.current = COLORS[state].primary; }, [state]);
+  useEffect(() => { isActiveRef.current = state !== "idle"; }, [state]);
+
+  // Particle sphere — Fibonacci distribution, runs once
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d')!;
+    if (!ctx) return;
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const CX = W / 2;
+    const CY = H / 2;
+    const SPHERE_R = W * 0.44;
+    const N = 480;
+
+    // Fibonacci sphere for even particle distribution
+    const pts: { x: number; y: number; z: number }[] = [];
+    const golden = Math.PI * (1 + Math.sqrt(5));
+    for (let i = 0; i < N; i++) {
+      const theta = Math.acos(1 - 2 * (i + 0.5) / N);
+      const phi = golden * i;
+      pts.push({
+        x: Math.sin(theta) * Math.cos(phi),
+        y: Math.sin(theta) * Math.sin(phi),
+        z: Math.cos(theta),
+      });
+    }
+
+    // Slight downward tilt for depth feel
+    const TILT = 0.22;
+    const cosT = Math.cos(TILT);
+    const sinT = Math.sin(TILT);
+
+    function hexRgb(hex: string): string {
+      const n = parseInt(hex.replace('#', ''), 16);
+      return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+    }
+
+    let raf: number;
+    let last = 0;
+
+    function draw(t: number) {
+      const dt = Math.min((t - last) / 1000, 0.05);
+      last = t;
+
+      rotYRef.current += isActiveRef.current ? 0.007 : 0.0025;
+      const cosY = Math.cos(rotYRef.current);
+      const sinY = Math.sin(rotYRef.current);
+      const rgb = hexRgb(primaryColorRef.current);
+
+      ctx.clearRect(0, 0, W, H);
+
+      const sorted = pts
+        .map(p => {
+          // Rotate around Y axis
+          const x1 = p.x * cosY - p.z * sinY;
+          const z1 = p.x * sinY + p.z * cosY;
+          // Tilt around X axis
+          const y2 = p.y * cosT - z1 * sinT;
+          const z2 = p.y * sinT + z1 * cosT;
+          return { px: CX + x1 * SPHERE_R, py: CY + y2 * SPHERE_R, depth: z2 };
+        })
+        .sort((a, b) => a.depth - b.depth); // back-to-front
+
+      for (const { px, py, depth } of sorted) {
+        const d = (depth + 1) / 2; // normalize 0..1
+        const radius = 0.6 + d * 2.0;
+        const alpha  = 0.06 + d * 0.90;
+        ctx.beginPath();
+        ctx.arc(px, py, radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${rgb},${alpha.toFixed(2)})`;
+        ctx.fill();
+      }
+
+      raf = requestAnimationFrame(draw);
+    }
+
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -303,19 +391,23 @@ export default function Home() {
           animationDelay: "0.76s",
         }} />
 
-        {/* Glow bloom */}
+        {/* Glow bloom behind canvas */}
         <div style={{
           position: "absolute",
-          width: isActive ? 218 : 184, height: isActive ? 218 : 184,
+          width: isActive ? 240 : 200, height: isActive ? 240 : 200,
           borderRadius: "50%",
-          background: `radial-gradient(circle, ${c.primary}40 0%, ${c.secondary}1e 50%, transparent 75%)`,
-          filter: "blur(24px)",
+          background: `radial-gradient(circle, ${c.primary}38 0%, ${c.secondary}18 50%, transparent 75%)`,
+          filter: "blur(28px)",
           animation: isActive ? "glowPulse 1.5s ease-in-out infinite" : "breathe 4s ease-in-out infinite",
-          transition: "background 0.6s ease, width 0.4s ease, height 0.4s ease",
+          transition: "background 0.6s ease, width 0.5s ease, height 0.5s ease",
+          pointerEvents: "none",
         }} />
 
-        {/* Core orb */}
-        <div
+        {/* Particle sphere canvas */}
+        <canvas
+          ref={canvasRef}
+          width={300}
+          height={300}
           role="button"
           tabIndex={0}
           aria-label={state === "listening" ? "Detener escucha" : "Iniciar escucha"}
@@ -323,64 +415,12 @@ export default function Home() {
           onKeyDown={e => e.key === "Enter" && (state === "listening" ? stopListening() : startListening())}
           style={{
             position: "relative",
-            width: isActive ? 172 : 150, height: isActive ? 172 : 150,
-            borderRadius: "50%",
-            background: `radial-gradient(circle at 35% 35%, ${c.primary}ff 0%, ${c.secondary}cc 45%, #1a1640 100%)`,
-            boxShadow: `
-              0 0 36px ${c.primary}88,
-              0 0 72px ${c.primary}40,
-              0 0 120px ${c.primary}1e,
-              inset 0 1px 2px rgba(255,255,255,0.32),
-              inset 0 -2px 6px rgba(0,0,0,0.55)
-            `,
-            filter: "url(#grain)",
-            animation: isActive ? "orbActive 0.8s ease-in-out infinite" : "breathe 4s ease-in-out infinite",
-            transition: "width 0.35s ease, height 0.35s ease, background 0.6s ease, box-shadow 0.6s ease",
             cursor: "pointer",
+            animation: isActive ? "orbActive 0.9s ease-in-out infinite" : "breathe 4s ease-in-out infinite",
+            filter: `drop-shadow(0 0 18px ${c.primary}66) drop-shadow(0 0 48px ${c.primary}2e)`,
+            transition: "filter 0.6s ease",
           }}
-        >
-          {/* Primary specular */}
-          <div style={{
-            position: "absolute", top: "17%", left: "21%",
-            width: "29%", height: "18%",
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.28)",
-            filter: "blur(4px)",
-            transform: "rotate(-30deg)",
-          }} />
-          {/* Secondary specular */}
-          <div style={{
-            position: "absolute", bottom: "24%", right: "18%",
-            width: "11%", height: "7%",
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.10)",
-            filter: "blur(3px)",
-          }} />
-        </div>
-
-        {/* Particle dots */}
-        {[0, 60, 120, 180, 240, 300].map((deg, i) => {
-          const r = isActive ? 122 : 108;
-          const x = Math.cos((deg * Math.PI) / 180) * r;
-          const y = Math.sin((deg * Math.PI) / 180) * r;
-          const size = i % 2 === 0 ? 6 : 4;
-          return (
-            <div key={i} aria-hidden="true" style={{
-              position: "absolute",
-              left: `calc(50% + ${x}px - ${size / 2}px)`,
-              top: `calc(50% + ${y}px - ${size / 2}px)`,
-              width: size, height: size,
-              borderRadius: "50%",
-              background: c.primary,
-              opacity: isActive ? 0.9 : 0.4,
-              boxShadow: `0 0 ${isActive ? 9 : 5}px ${c.primary}`,
-              animation: isActive
-                ? `dotPulse 1.2s ease-in-out ${i * 0.15}s infinite`
-                : `dotBreath 4s ease-in-out ${i * 0.3}s infinite`,
-              transition: "opacity 0.5s ease, left 0.4s ease, top 0.4s ease, background 0.6s ease",
-            }} />
-          );
-        })}
+        />
       </div>
 
       {/* ── Status pill ── */}
