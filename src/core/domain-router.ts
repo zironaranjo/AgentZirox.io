@@ -49,10 +49,10 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
         'web_search',
     ],
     tiktok: [
-        'generate_video',
+        'generate_video', 'create_short_video',
         'tiktok_propose_video', 'approve_tiktok_video', 'reject_tiktok_video', 'tiktok_list_pending',
         'analyze_reference', 'save_style_recipe', 'list_style_recipes', 'create_from_style', 'delete_style_recipe',
-        'youtube_transcript',
+        'youtube_transcript', 'generate_image',
     ],
     productivity: [
         'schedule_task', 'list_scheduled_tasks', 'cancel_scheduled_task',

@@ -3,12 +3,15 @@ FROM node:20-bookworm-slim
 WORKDIR /app
 
 # herramientas de compilación para better-sqlite3 + Python 3.11 para notebooklm-py
+# ffmpeg + fuentes DejaVu para montaje de vídeos cortos (create_short_video)
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \
     make \
     g++ \
+    ffmpeg \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # NotebookLM: pip install + playwright browser (auth vía volumen /app/.notebooklm)

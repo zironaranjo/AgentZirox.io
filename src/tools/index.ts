@@ -43,5 +43,6 @@ import './update-user-context';
 import './tiktok';
 import './generate-video';
 import './content-style';
+import './create-short-video';
 import './obsidian';
 import './desktop';

@@ -28,13 +28,35 @@ export function setPendingTelegramAudioPath(chatId: string, filePath: string, ca
     else pendingTelegramAudioCaption.delete(chatId);
 }
 
-const VOICES: Record<string, string> = {
+export const VOICES: Record<string, string> = {
     elvira: 'es-ES-ElviraNeural',
     alvaro: 'es-ES-AlvaroNeural',
     jorge: 'es-MX-JorgeNeural',
     dalia: 'es-MX-DaliaNeural',
     default: 'es-MX-JorgeNeural',
 };
+
+/**
+ * Sintetiza voz a partir de texto y devuelve el MP3 como Buffer.
+ * Reutilizable por otras tools (ej. create_short_video). Usa Edge TTS gratuito.
+ */
+export async function synthesizeSpeech(text: string, voiceKey = 'default'): Promise<Buffer> {
+    const clean = text.trim();
+    if (!clean) throw new Error('synthesizeSpeech: texto vacío');
+    const voice = VOICES[voiceKey.toLowerCase()] ?? VOICES.default;
+
+    const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts');
+    const tts = new MsEdgeTTS();
+    await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+
+    return await new Promise<Buffer>((resolve, reject) => {
+        const { audioStream } = tts.toStream(clean);
+        const chunks: Buffer[] = [];
+        audioStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+        audioStream.on('end', () => resolve(Buffer.concat(chunks)));
+        audioStream.on('error', reject);
+    });
+}
 
 registerTool({
     name: 'tts_generate',

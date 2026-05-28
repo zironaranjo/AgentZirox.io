@@ -208,6 +208,27 @@ export async function uploadAudioToStorage(
     return { publicUrl, id: Number(data.id) };
 }
 
+export async function uploadVideoToStorage(
+    buffer: Buffer,
+    chatId: string,
+    slug: string
+): Promise<{ publicUrl: string; bucketPath: string }> {
+    const supabase = getClient();
+    const safeSlug = slug.toLowerCase().replace(/[^a-z0-9-]/gi, '-').slice(0, 48) || 'video';
+    const path = `short-videos/${chatId}/${safeSlug}-${Date.now()}.mp4`;
+
+    const { error: uploadError } = await supabase.storage
+        .from(BUCKET)
+        .upload(path, buffer, { contentType: 'video/mp4', upsert: false });
+
+    if (uploadError) throw new Error(`Error subiendo vídeo: ${uploadError.message}`);
+
+    const {
+        data: { publicUrl },
+    } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    return { publicUrl, bucketPath: path };
+}
+
 export async function listAudioMedia(chatId?: string, limit = 20): Promise<MediaRecord[]> {
     const supabase = getClient();
     let query = supabase

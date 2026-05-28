@@ -242,6 +242,24 @@ function isKieTimeoutError(err: unknown): err is Error {
     return err instanceof Error && /Kie: tiempo de espera agotado/i.test(err.message);
 }
 
+/**
+ * Genera una imagen y devuelve su URL pública. Reutilizable por otras tools
+ * (ej. create_short_video para el fondo del vídeo). Usa Kie.ai u OpenAI.
+ */
+export async function generateImageUrl(
+    prompt: string,
+    size: '1024x1024' | '1792x1024' | '1024x1792' = '1024x1792'
+): Promise<string> {
+    const p = prompt.trim();
+    if (!p) throw new Error('generateImageUrl: prompt vacío');
+    const provider = resolveImageProvider();
+    if (provider === 'kie') {
+        return kieGenerateImageUrl(p, openAiSizeToKieRatio(size));
+    }
+    const r = await openAiCreateImage(p, size);
+    return r.url;
+}
+
 registerTool({
     name: 'generate_image',
     description:
