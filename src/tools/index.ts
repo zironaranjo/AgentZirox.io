@@ -42,5 +42,6 @@ import './save-audio';
 import './update-user-context';
 import './tiktok';
 import './generate-video';
+import './content-style';
 import './obsidian';
 import './desktop';

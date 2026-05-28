@@ -51,6 +51,8 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
     tiktok: [
         'generate_video',
         'tiktok_propose_video', 'approve_tiktok_video', 'reject_tiktok_video', 'tiktok_list_pending',
+        'analyze_reference', 'save_style_recipe', 'list_style_recipes', 'create_from_style', 'delete_style_recipe',
+        'youtube_transcript',
     ],
     productivity: [
         'schedule_task', 'list_scheduled_tasks', 'cancel_scheduled_task',
@@ -104,7 +106,8 @@ export function classifyDomain(msg: string): Domain {
     if (/\b(infograf[ií]a|infographic|canva|diseño\s+para\s+linkedin|post\s+visual)\b/.test(t)) return 'notes';
     if (/\b(obsidian|vault|nota.*obsidian|obsidian.*nota|busca.*nota|buscar.*nota|crea.*nota|escribe.*nota|actualiza.*nota|lee.*nota|leer.*nota|muestra.*nota|abre.*nota|nota\s+en\s+obsidian|apunte.*obsidian)\b/.test(t)) return 'notes';
 
-    if (/\b(tiktok|tik\s*tok|sube.*video|publica.*video|video.*tiktok|short[s]?|genera.*video.*tiktok|crea.*video.*tiktok)\b/.test(t)) return 'tiktok';
+    if (/\b(tiktok|tik\s*tok|sube.*video|publica.*video|video.*tiktok|short[s]?|reel[s]?|genera.*video.*tiktok|crea.*video.*tiktok)\b/.test(t)) return 'tiktok';
+    if (/\b(analiza|aprende\s+de|imita|copia\s+el\s+(estilo|formato)|me\s+gusta\s+este|estilo\s+de|receta\s+de\s+estilo)\b/.test(t) && /\b(video|v[ií]deo|tiktok|reel|short|formato|estilo)\b/.test(t)) return 'tiktok';
 
     if (/\b(linkedin|post de linkedin|publicaci[oó]n|draft|borrador|redacta.*post|escribir.*post|crea.*post|haz.*post|escrib[ei].*post|\bpost\s+(sobre|de|con|para|acerca|en linkedin))\b/.test(t)) return 'linkedin';
 
