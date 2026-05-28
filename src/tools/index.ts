@@ -44,5 +44,7 @@ import './tiktok';
 import './generate-video';
 import './content-style';
 import './create-short-video';
+import './create-linkedin-video';
+import './create-tiktok-text-video';
 import './obsidian';
 import './desktop';

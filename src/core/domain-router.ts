@@ -28,6 +28,7 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
     media: [
         'generate_image',
         'generate_video',
+        'create_short_video',
         'save_image', 'list_images', 'delete_image', 'get_saved_image',
         'tts_generate',
         'save_audio',
@@ -46,10 +47,12 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
         'linkedin_save_draft', 'linkedin_propose_post', 'linkedin_list_drafts',
         'approve_linkedin_post', 'reject_linkedin_post',
         'generate_image',
+        'create_linkedin_video',
         'web_search',
     ],
     tiktok: [
         'generate_video', 'create_short_video',
+        'create_tiktok_text_video',
         'tiktok_propose_video', 'approve_tiktok_video', 'reject_tiktok_video', 'tiktok_list_pending',
         'analyze_reference', 'save_style_recipe', 'list_style_recipes', 'create_from_style', 'delete_style_recipe',
         'youtube_transcript', 'generate_image',
@@ -107,6 +110,8 @@ export function classifyDomain(msg: string): Domain {
     if (/\b(obsidian|vault|nota.*obsidian|obsidian.*nota|busca.*nota|buscar.*nota|crea.*nota|escribe.*nota|actualiza.*nota|lee.*nota|leer.*nota|muestra.*nota|abre.*nota|nota\s+en\s+obsidian|apunte.*obsidian)\b/.test(t)) return 'notes';
 
     if (/\b(tiktok|tik\s*tok|sube.*video|publica.*video|video.*tiktok|short[s]?|reel[s]?|genera.*video.*tiktok|crea.*video.*tiktok)\b/.test(t)) return 'tiktok';
+    // Vídeo CON VOZ / guion / subtítulos / modo veo|kenburns → create_short_video (dominio tiktok)
+    if (/\b(v[ií]deo|video)\b/.test(t) && /\b(con\s+voz|voz\s+en\s+off|narraci[oó]n|gui[oó]n|guion|subt[ií]tulos|modo\s+veo|modo\s+kenburns|varios\s+clips|\d+\s+clips)\b/.test(t)) return 'tiktok';
     if (/\b(analiza|aprende\s+de|imita|copia\s+el\s+(estilo|formato)|me\s+gusta\s+este|estilo\s+de|receta\s+de\s+estilo)\b/.test(t) && /\b(video|v[ií]deo|tiktok|reel|short|formato|estilo)\b/.test(t)) return 'tiktok';
 
     if (/\b(linkedin|post de linkedin|publicaci[oó]n|draft|borrador|redacta.*post|escribir.*post|crea.*post|haz.*post|escrib[ei].*post|\bpost\s+(sobre|de|con|para|acerca|en linkedin))\b/.test(t)) return 'linkedin';
