@@ -12,29 +12,112 @@ function sleep(ms: number): Promise<void> {
     return new Promise((r) => setTimeout(r, ms));
 }
 
-function extractVeoUrl(data: Record<string, unknown>): string | undefined {
-    const tryArr = (v: unknown): string | undefined =>
-        Array.isArray(v) && typeof v[0] === 'string' ? (v[0] as string) : undefined;
+function toRecord(v: unknown): Record<string, unknown> | undefined {
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+}
 
-    // Variantes conocidas del API de Kie Veo
-    const info = data.info as Record<string, unknown> | undefined;
-    const response = data.response as Record<string, unknown> | undefined;
-    const direct =
-        tryArr(data.resultUrls) ??
-        tryArr(info?.resultUrls) ??
-        tryArr(info?.result_urls) ??
-        tryArr(response?.resultUrls) ??
-        tryArr(response?.result_urls);
-    if (direct) return direct;
-
-    const resultJson = (data.resultJson ?? response?.resultJson) as string | undefined;
-    if (resultJson) {
+function parseMaybeObject(v: unknown): Record<string, unknown> | undefined {
+    const rec = toRecord(v);
+    if (rec) return rec;
+    if (typeof v === 'string') {
         try {
-            const parsed = JSON.parse(resultJson) as { resultUrls?: string[] };
-            return tryArr(parsed.resultUrls);
-        } catch { /* ignore */ }
+            const parsed = JSON.parse(v) as unknown;
+            return toRecord(parsed);
+        } catch {
+            return undefined;
+        }
     }
     return undefined;
+}
+
+function pickFirstUrl(v: unknown): string | undefined {
+    if (typeof v === 'string' && /^https?:\/\//i.test(v)) return v;
+    if (Array.isArray(v)) {
+        for (const item of v) {
+            if (typeof item === 'string' && /^https?:\/\//i.test(item)) return item;
+            const rec = toRecord(item);
+            const url = rec?.url ?? rec?.videoUrl ?? rec?.video_url;
+            if (typeof url === 'string' && /^https?:\/\//i.test(url)) return url;
+        }
+    }
+    return undefined;
+}
+
+function extractVeoUrl(data: Record<string, unknown>): string | undefined {
+    // Variantes conocidas del API de Kie Veo
+    const info = parseMaybeObject(data.info);
+    const response = parseMaybeObject(data.response);
+    const result = parseMaybeObject(data.result);
+    const payload = parseMaybeObject(data.payload);
+
+    const direct =
+        pickFirstUrl(data.resultUrls) ??
+        pickFirstUrl(data.result_urls) ??
+        pickFirstUrl(data.videoUrl) ??
+        pickFirstUrl(data.video_url) ??
+        pickFirstUrl(data.url) ??
+        pickFirstUrl(info?.resultUrls) ??
+        pickFirstUrl(info?.result_urls) ??
+        pickFirstUrl(info?.videoUrl) ??
+        pickFirstUrl(info?.video_url) ??
+        pickFirstUrl(response?.resultUrls) ??
+        pickFirstUrl(response?.result_urls) ??
+        pickFirstUrl(response?.videoUrl) ??
+        pickFirstUrl(response?.video_url) ??
+        pickFirstUrl(result?.resultUrls) ??
+        pickFirstUrl(result?.result_urls) ??
+        pickFirstUrl(payload?.resultUrls) ??
+        pickFirstUrl(payload?.result_urls);
+    if (direct) return direct;
+
+    const resultJson = (data.resultJson ?? response?.resultJson ?? result?.resultJson) as string | undefined;
+    if (resultJson) {
+        try {
+            const parsed = JSON.parse(resultJson) as Record<string, unknown>;
+            return (
+                pickFirstUrl(parsed.resultUrls) ??
+                pickFirstUrl(parsed.result_urls) ??
+                pickFirstUrl(parsed.videoUrl) ??
+                pickFirstUrl(parsed.video_url) ??
+                pickFirstUrl(parsed.url)
+            );
+        } catch { /* ignore */ }
+    }
+
+    return undefined;
+}
+
+function normalizeState(data: Record<string, unknown>): string {
+    const raw = data.state ?? data.status ?? data.taskStatus ?? data.progressStatus;
+    const text = String(raw ?? '').toLowerCase();
+    if (!text) return '';
+    if (['success', 'succeeded', 'completed', 'done', 'finish', 'finished', '1'].includes(text)) return 'success';
+    if (['fail', 'failed', 'error', '2', '3'].includes(text)) return 'failed';
+    if (['waiting', 'queued', 'queuing', 'generating', 'processing', 'in_progress', 'running', '0'].includes(text)) return 'running';
+    return text;
+}
+
+function isSuccessFlag(v: unknown): boolean | null {
+    if (v === true || v === 1 || v === '1' || String(v).toLowerCase() === 'true') return true;
+    if (v === false || v === 2 || v === 3 || v === '2' || v === '3' || String(v).toLowerCase() === 'false') return false;
+    return null;
+}
+
+async function tryGet1080pUrl(taskId: string, apiKey: string): Promise<string | undefined> {
+    try {
+        const res = await fetch(
+            `${KIE_BASE}/api/v1/veo/get-1080p-video?taskId=${encodeURIComponent(taskId)}`,
+            { headers: { Authorization: `Bearer ${apiKey}` } }
+        );
+        const raw = await res.text();
+        if (!res.ok) return undefined;
+        let json: { code?: number; data?: Record<string, unknown> };
+        try { json = JSON.parse(raw) as typeof json; } catch { return undefined; }
+        if (json.code !== 200 || !json.data) return undefined;
+        return extractVeoUrl(json.data);
+    } catch {
+        return undefined;
+    }
 }
 
 /**
@@ -69,9 +152,11 @@ export async function kieGenerateVeoClip(prompt: string): Promise<string> {
     }
     const taskId = genJson.data.taskId;
 
-    const maxMs = Math.min(600_000, Math.max(60_000, parseInt(process.env.KIE_VEO_POLL_MAX_MS ?? '300000', 10) || 300_000));
+    const maxMs = Math.min(900_000, Math.max(60_000, parseInt(process.env.KIE_VEO_POLL_MAX_MS ?? '480000', 10) || 480_000));
     const intervalMs = Math.min(20_000, Math.max(5000, parseInt(process.env.KIE_VEO_POLL_INTERVAL_MS ?? '12000', 10) || 12_000));
     const start = Date.now();
+    let lastState = 'running';
+    let lastSummary = '';
 
     while (Date.now() - start < maxMs) {
         await sleep(intervalMs);
@@ -91,19 +176,26 @@ export async function kieGenerateVeoClip(prompt: string): Promise<string> {
         }
 
         const data = infoJson.data;
-        const state = String(data.state ?? data.successFlag ?? '').toLowerCase();
+        const state = normalizeState(data);
+        const successFlag = isSuccessFlag(data.successFlag);
         const url = extractVeoUrl(data);
+        const elapsed = Date.now() - start;
+        lastState = state || (successFlag === true ? 'success' : successFlag === false ? 'failed' : 'running');
+        lastSummary = `state=${lastState} successFlag=${String(data.successFlag ?? '')} elapsedMs=${elapsed}`;
+        logger.info(`[KIE-VEO] poll taskId=${taskId} ${lastSummary} urlFound=${url ? 'yes' : 'no'}`);
 
         if (url) return url;
-        if (state === 'success' || state === '1') {
-            const u = extractVeoUrl(data);
-            if (u) return u;
+        if (lastState === 'success' || successFlag === true) {
+            const fallback1080 = await tryGet1080pUrl(taskId, apiKey);
+            if (fallback1080) return fallback1080;
+            // Éxito sin URL: reintentar algunos ciclos por consistencia eventual
+            continue;
         }
-        if (state === 'fail' || state === 'failed' || state === '2' || state === '3') {
-            throw new Error(`KIE-VEO generación fallida: ${String(data.failMsg ?? data.failCode ?? state)}`);
+        if (lastState === 'failed' || successFlag === false) {
+            throw new Error(`KIE-VEO generación fallida: ${String(data.failMsg ?? data.failCode ?? lastState)}`);
         }
         // waiting / queuing / generating → seguir
     }
 
-    throw new Error(`KIE-VEO: tiempo de espera agotado para taskId ${taskId}.`);
+    throw new Error(`KIE-VEO: tiempo de espera agotado para taskId ${taskId}. Último estado: ${lastSummary || lastState}.`);
 }
