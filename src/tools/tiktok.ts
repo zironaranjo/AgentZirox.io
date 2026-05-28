@@ -124,9 +124,16 @@ registerTool({
         }
 
         try {
-            const { publishId } = await publishTikTokVideo(row.video_url, row.caption, row.privacy);
+            const { publishId, mode } = await publishTikTokVideo(row.video_url, row.caption, row.privacy);
             await updatePending(row.id, { status: 'published', publish_id: publishId });
-            return `✅ Video publicado en TikTok.\nPublish ID: \`${publishId}\``;
+            if (mode === 'inbox') {
+                return [
+                    '✅ Video enviado a TikTok como **borrador**.',
+                    'Ábrelo en la app de TikTok (Bandeja de entrada / Borradores) y dale **Publicar**.',
+                    `Publish ID: \`${publishId}\``,
+                ].join('\n');
+            }
+            return `✅ Video publicado en TikTok (directo).\nPublish ID: \`${publishId}\``;
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             await updatePending(row.id, { status: 'failed', error: msg });
