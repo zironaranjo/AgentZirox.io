@@ -16,9 +16,9 @@ function getKieKey(): string {
 registerTool({
     name: 'generate_video',
     description:
-        'Genera un video corto (8s, vertical 9:16, 1080p) desde una descripción de texto usando Kie.ai Veo 3.1. ' +
-        'Ideal para crear contenido para TikTok. Requiere KIE_API_KEY. ' +
-        'Kie avisará por Telegram cuando el video esté listo (~2-5 min) y lo propondrá automáticamente para TikTok.',
+        'Genera UN ÚNICO clip cinematográfico de 8s (vertical 9:16, 1080p) desde texto con Kie.ai Veo 3.1, SIN voz en off propia ni subtítulos quemados ni guion multi-frase. ' +
+        'Úsala SOLO para un clip suelto. ⚠️ Si el usuario pide un vídeo CON VOZ en off, con SUBTÍTULOS, con GUION de varias frases, o "modo veo/kenburns con voz", NO uses esta tool: usa create_short_video (que genera los clips, los une y añade voz+subtítulos en un solo vídeo). ' +
+        'Requiere KIE_API_KEY. Kie avisará por Telegram cuando el video esté listo (~2-5 min) y lo propondrá para TikTok.',
     parameters: {
         type: 'object',
         properties: {

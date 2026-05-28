@@ -44,6 +44,10 @@ RUN npm run build
 RUN npx tsup \
     --external dotenv \
     --external remotion \
+    --external playwright \
+    --external playwright-core \
+    --external chromium-bidi \
+    --external "chromium-bidi/*" \
     --external @remotion/renderer \
     --external @remotion/bundler \
     --external @remotion/cli \
