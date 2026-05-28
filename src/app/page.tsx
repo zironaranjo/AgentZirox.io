@@ -37,7 +37,6 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Strip HTML tags for TTS
   const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&[a-z]+;/g, " ").trim();
 
   const speakText = useCallback((text: string) => {
@@ -47,7 +46,6 @@ export default function Home() {
     utter.lang = "es-ES";
     utter.rate = 1.05;
     utter.pitch = 1;
-    // Prefer a Spanish voice if available
     const voices = window.speechSynthesis.getVoices();
     const esVoice = voices.find(v => v.lang.startsWith("es")) ?? null;
     if (esVoice) utter.voice = esVoice;
@@ -56,7 +54,6 @@ export default function Home() {
     window.speechSynthesis.speak(utter);
   }, []);
 
-  // Voices may load async — pre-load on mount
   useEffect(() => {
     if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
   }, []);
@@ -79,9 +76,9 @@ export default function Home() {
       const reply = data.reply ?? "(sin respuesta)";
       setMessages(prev => [...prev, { text: reply, sender: "bot" }]);
       setLastReply(reply);
-      setShowChat(true);   // auto-open chat so user sees the response
+      setShowChat(true);
       setState("speaking");
-      speakText(reply);    // read reply aloud
+      speakText(reply);
     } catch {
       setMessages(prev => [...prev, { text: "[Error de conexión]", sender: "bot" }]);
       setState("idle");
@@ -123,7 +120,6 @@ export default function Home() {
       else if (code !== "aborted")
         setMicError(`Error de voz: ${code}`);
     };
-    // Fix stale closure: use functional updater so we read current state
     r.onend = () => {
       recogRef.current = null;
       setState(prev => prev === "listening" ? "idle" : prev);
@@ -141,16 +137,16 @@ export default function Home() {
 
   return (
     <div style={{
-      minHeight: "100vh", width: "100%",
-      background: "#07070a",
+      minHeight: "100svh", width: "100%",
+      background: "#050508",
       display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center",
-      fontFamily: "'Inter', system-ui, sans-serif",
+      fontFamily: "'Outfit', 'Inter', system-ui, sans-serif",
       position: "relative", overflow: "hidden",
     }}>
 
       {/* ── SVG grain filter ── */}
-      <svg style={{ position: "absolute", width: 0, height: 0 }}>
+      <svg style={{ position: "absolute", width: 0, height: 0 }} aria-hidden="true">
         <defs>
           <filter id="grain" x="0%" y="0%" width="100%" height="100%">
             <feTurbulence type="fractalNoise" baseFrequency="0.72" numOctaves="4" stitchTiles="stitch" result="noise"/>
@@ -161,24 +157,51 @@ export default function Home() {
         </defs>
       </svg>
 
-      {/* ── Background ambient glow ── */}
+      {/* ── Background: static corner blobs ── */}
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }} aria-hidden="true">
+        <div style={{
+          position: "absolute", bottom: "-15%", left: "-8%",
+          width: "55%", height: "65%",
+          background: "radial-gradient(ellipse at center, #4c1d9516 0%, transparent 65%)",
+          filter: "blur(48px)",
+        }} />
+        <div style={{
+          position: "absolute", top: "-10%", right: "-8%",
+          width: "50%", height: "55%",
+          background: "radial-gradient(ellipse at center, #0c4a6e14 0%, transparent 65%)",
+          filter: "blur(48px)",
+        }} />
+      </div>
+
+      {/* ── Dynamic ambient glow (follows state color) ── */}
       <div style={{
         position: "absolute", inset: 0, pointerEvents: "none",
-        background: `radial-gradient(ellipse 60% 60% at 50% 50%, ${c.primary}18 0%, transparent 70%)`,
+        background: `radial-gradient(ellipse 55% 55% at 50% 48%, ${c.primary}13 0%, transparent 70%)`,
         transition: "background 0.8s ease",
-      }} />
+      }} aria-hidden="true" />
 
-      {/* ── Avatar — top-left ── */}
+      {/* ══════════════════════════════════════════
+          Header — centered glass pill
+      ══════════════════════════════════════════ */}
       <div style={{
-        position: "fixed", top: 20, left: 20,
+        position: "fixed", top: 18, left: "50%", transform: "translateX(-50%)",
+        background: "rgba(255,255,255,0.04)",
+        backdropFilter: "blur(24px)",
+        WebkitBackdropFilter: "blur(24px)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 60,
+        padding: "6px 8px 6px 8px",
         display: "flex", alignItems: "center", gap: 10,
         zIndex: 50,
+        whiteSpace: "nowrap",
+        boxShadow: "0 4px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
       }}>
+        {/* Avatar */}
         <div style={{
-          width: 52, height: 52, borderRadius: "50%",
+          width: 38, height: 38, borderRadius: "50%",
           padding: 2,
           background: `linear-gradient(135deg, ${c.primary}, ${c.secondary})`,
-          boxShadow: `0 0 16px ${c.primary}66`,
+          boxShadow: `0 0 14px ${c.primary}55`,
           transition: "box-shadow 0.6s ease, background 0.6s ease",
           flexShrink: 0,
         }}>
@@ -189,146 +212,201 @@ export default function Home() {
             <Image src="/avatar.png" alt="Ziro" fill style={{ objectFit: "cover" }} priority />
           </div>
         </div>
-        <div>
-          <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: 14, letterSpacing: 3 }}>ZIRO</div>
-          <div style={{ color: c.primary, fontSize: 10, fontWeight: 600, letterSpacing: 2, transition: "color 0.6s ease" }}>
-            {LABELS[state].toUpperCase()}
+
+        {/* Name + state */}
+        <div style={{ paddingRight: 4 }}>
+          <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: 13, letterSpacing: "0.18em" }}>ZIRO</div>
+          <div style={{
+            color: c.primary, fontSize: 9, fontWeight: 600,
+            letterSpacing: "0.18em", textTransform: "uppercase",
+            transition: "color 0.6s ease",
+          }}>
+            {LABELS[state]}
           </div>
         </div>
-      </div>
 
-      {/* ── Chat toggle — top-right ── */}
-      <button onClick={() => setShowChat(v => !v)} style={{
-        position: "fixed", top: 20, right: 20, zIndex: 50,
-        background: showChat ? `${c.primary}33` : "rgba(255,255,255,0.05)",
-        border: `1px solid ${showChat ? c.primary : "rgba(255,255,255,0.1)"}`,
-        borderRadius: 12, padding: "8px 16px",
-        color: "#f1f5f9", fontSize: 12, fontWeight: 600, cursor: "pointer",
-        letterSpacing: 1, transition: "all 0.3s ease",
-      }}>
-        {showChat ? "✕ CERRAR" : "💬 CHAT"}
-      </button>
+        {/* Divider */}
+        <div style={{ width: 1, height: 26, background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
+
+        {/* Chat toggle — SVG icon instead of emoji */}
+        <button
+          onClick={() => setShowChat(v => !v)}
+          aria-label={showChat ? "Cerrar chat" : "Abrir chat"}
+          aria-expanded={showChat}
+          style={{
+            background: showChat ? `${c.primary}20` : "transparent",
+            border: `1px solid ${showChat ? `${c.primary}44` : "rgba(255,255,255,0.08)"}`,
+            borderRadius: 30,
+            padding: "6px 14px 6px 10px",
+            color: showChat ? c.primary : "rgba(255,255,255,0.5)",
+            fontSize: 11, fontWeight: 600, cursor: "pointer",
+            letterSpacing: "0.08em", textTransform: "uppercase",
+            transition: "all 0.25s ease",
+            display: "flex", alignItems: "center", gap: 6,
+            flexShrink: 0,
+            minHeight: 32,
+          }}
+        >
+          {showChat ? (
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          )}
+          {showChat ? "Cerrar" : "Chat"}
+        </button>
+      </div>
 
       {/* ══════════════════════════════════════════
           Central Granular Orb
       ══════════════════════════════════════════ */}
       <div style={{
         position: "relative",
-        width: 320, height: 320,
+        width: 340, height: 340,
         display: "flex", alignItems: "center", justifyContent: "center",
-        marginBottom: 48,
+        marginBottom: 32,
       }}>
 
-        {/* Outer pulse ring 3 */}
+        {/* Ring 3 — outermost */}
         <div style={{
           position: "absolute",
-          width: isActive ? 340 : 280, height: isActive ? 340 : 280,
+          width: isActive ? 358 : 296, height: isActive ? 358 : 296,
           borderRadius: "50%",
-          border: `1px solid ${c.primary}22`,
+          border: `1px solid ${c.primary}18`,
           animation: isActive ? "ringPulse 2s ease-out infinite" : "ringIdle 4s ease-in-out infinite",
-          transition: "border-color 0.6s ease",
+          transition: "border-color 0.6s ease, width 0.4s ease, height 0.4s ease",
           animationDelay: "0s",
         }} />
 
-        {/* Outer pulse ring 2 */}
+        {/* Ring 2 */}
         <div style={{
           position: "absolute",
-          width: isActive ? 290 : 245, height: isActive ? 290 : 245,
+          width: isActive ? 304 : 256, height: isActive ? 304 : 256,
           borderRadius: "50%",
-          border: `1px solid ${c.primary}33`,
+          border: `1px solid ${c.primary}2c`,
           animation: isActive ? "ringPulse 2s ease-out infinite" : "ringIdle 4s ease-in-out infinite",
-          transition: "border-color 0.6s ease",
-          animationDelay: "0.4s",
+          transition: "border-color 0.6s ease, width 0.4s ease, height 0.4s ease",
+          animationDelay: "0.38s",
         }} />
 
-        {/* Inner ring */}
+        {/* Ring 1 — innermost */}
         <div style={{
           position: "absolute",
-          width: isActive ? 240 : 210, height: isActive ? 240 : 210,
+          width: isActive ? 252 : 220, height: isActive ? 252 : 220,
           borderRadius: "50%",
-          border: `1px solid ${c.primary}55`,
+          border: `1px solid ${c.primary}4c`,
           animation: isActive ? "ringPulse 2s ease-out infinite" : "ringIdle 4s ease-in-out infinite",
-          transition: "border-color 0.6s ease",
-          animationDelay: "0.8s",
+          transition: "border-color 0.6s ease, width 0.4s ease, height 0.4s ease",
+          animationDelay: "0.76s",
         }} />
 
-        {/* Glow layer */}
+        {/* Glow bloom */}
         <div style={{
           position: "absolute",
-          width: isActive ? 200 : 170, height: isActive ? 200 : 170,
+          width: isActive ? 218 : 184, height: isActive ? 218 : 184,
           borderRadius: "50%",
-          background: `radial-gradient(circle, ${c.primary}44 0%, ${c.secondary}22 50%, transparent 75%)`,
-          filter: "blur(20px)",
+          background: `radial-gradient(circle, ${c.primary}40 0%, ${c.secondary}1e 50%, transparent 75%)`,
+          filter: "blur(24px)",
           animation: isActive ? "glowPulse 1.5s ease-in-out infinite" : "breathe 4s ease-in-out infinite",
-          transition: "background 0.6s ease",
+          transition: "background 0.6s ease, width 0.4s ease, height 0.4s ease",
         }} />
 
-        {/* Granular orb — core */}
-        <div style={{
-          position: "relative",
-          width: isActive ? 160 : 140, height: isActive ? 160 : 140,
-          borderRadius: "50%",
-          background: `radial-gradient(circle at 35% 35%, ${c.primary}ff 0%, ${c.secondary}cc 45%, #1e1b4b 100%)`,
-          boxShadow: `
-            0 0 30px ${c.primary}88,
-            0 0 60px ${c.primary}44,
-            0 0 100px ${c.primary}22,
-            inset 0 1px 2px rgba(255,255,255,0.35),
-            inset 0 -2px 6px rgba(0,0,0,0.5)
-          `,
-          filter: "url(#grain)",
-          animation: isActive ? "orbActive 0.8s ease-in-out infinite" : "breathe 4s ease-in-out infinite",
-          transition: "width 0.4s ease, height 0.4s ease, background 0.6s ease, box-shadow 0.6s ease",
-          cursor: "pointer",
-        }}
+        {/* Core orb */}
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={state === "listening" ? "Detener escucha" : "Iniciar escucha"}
           onClick={state === "listening" ? stopListening : startListening}
-        >
-          {/* Specular highlight */}
-          <div style={{
-            position: "absolute", top: "18%", left: "22%",
-            width: "30%", height: "20%",
+          onKeyDown={e => e.key === "Enter" && (state === "listening" ? stopListening() : startListening())}
+          style={{
+            position: "relative",
+            width: isActive ? 172 : 150, height: isActive ? 172 : 150,
             borderRadius: "50%",
-            background: "rgba(255,255,255,0.25)",
+            background: `radial-gradient(circle at 35% 35%, ${c.primary}ff 0%, ${c.secondary}cc 45%, #1a1640 100%)`,
+            boxShadow: `
+              0 0 36px ${c.primary}88,
+              0 0 72px ${c.primary}40,
+              0 0 120px ${c.primary}1e,
+              inset 0 1px 2px rgba(255,255,255,0.32),
+              inset 0 -2px 6px rgba(0,0,0,0.55)
+            `,
+            filter: "url(#grain)",
+            animation: isActive ? "orbActive 0.8s ease-in-out infinite" : "breathe 4s ease-in-out infinite",
+            transition: "width 0.35s ease, height 0.35s ease, background 0.6s ease, box-shadow 0.6s ease",
+            cursor: "pointer",
+          }}
+        >
+          {/* Primary specular */}
+          <div style={{
+            position: "absolute", top: "17%", left: "21%",
+            width: "29%", height: "18%",
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.28)",
             filter: "blur(4px)",
             transform: "rotate(-30deg)",
           }} />
+          {/* Secondary specular */}
+          <div style={{
+            position: "absolute", bottom: "24%", right: "18%",
+            width: "11%", height: "7%",
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.10)",
+            filter: "blur(3px)",
+          }} />
         </div>
 
-        {/* Particle dots — decorative */}
+        {/* Particle dots */}
         {[0, 60, 120, 180, 240, 300].map((deg, i) => {
-          const r = isActive ? 118 : 105;
+          const r = isActive ? 122 : 108;
           const x = Math.cos((deg * Math.PI) / 180) * r;
           const y = Math.sin((deg * Math.PI) / 180) * r;
           const size = i % 2 === 0 ? 6 : 4;
           return (
-            <div key={i} style={{
+            <div key={i} aria-hidden="true" style={{
               position: "absolute",
               left: `calc(50% + ${x}px - ${size / 2}px)`,
               top: `calc(50% + ${y}px - ${size / 2}px)`,
               width: size, height: size,
               borderRadius: "50%",
               background: c.primary,
-              opacity: isActive ? 0.9 : 0.45,
-              boxShadow: `0 0 ${isActive ? 8 : 4}px ${c.primary}`,
-              animation: isActive ? `dotPulse 1.2s ease-in-out ${i * 0.15}s infinite` : `dotBreath 4s ease-in-out ${i * 0.3}s infinite`,
+              opacity: isActive ? 0.9 : 0.4,
+              boxShadow: `0 0 ${isActive ? 9 : 5}px ${c.primary}`,
+              animation: isActive
+                ? `dotPulse 1.2s ease-in-out ${i * 0.15}s infinite`
+                : `dotBreath 4s ease-in-out ${i * 0.3}s infinite`,
               transition: "opacity 0.5s ease, left 0.4s ease, top 0.4s ease, background 0.6s ease",
             }} />
           );
         })}
       </div>
 
-      {/* ── Status text ── */}
+      {/* ── Status pill ── */}
       <div style={{
-        color: c.primary, fontSize: 13, fontWeight: 600, letterSpacing: 4,
-        textTransform: "uppercase", marginBottom: 12,
-        opacity: 0.9, transition: "color 0.6s ease",
-      }}>
+        background: `${c.primary}10`,
+        border: `1px solid ${c.primary}28`,
+        borderRadius: 100,
+        padding: "5px 18px",
+        color: c.primary,
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: "0.22em",
+        textTransform: "uppercase",
+        marginBottom: 18,
+        transition: "all 0.6s ease",
+        backdropFilter: "blur(8px)",
+      }}
+        aria-live="polite"
+        aria-label={`Estado: ${LABELS[state]}`}
+      >
         {LABELS[state]}
       </div>
 
-      {/* ── Live transcript / last reply caption ── */}
+      {/* ── Transcript / reply caption ── */}
       <div style={{
-        minHeight: 48, marginBottom: 20,
+        minHeight: 52, marginBottom: 22,
         maxWidth: 480, width: "90%",
         textAlign: "center",
         transition: "opacity 0.4s ease",
@@ -336,25 +414,29 @@ export default function Home() {
       }}>
         {state === "listening" && transcript && (
           <div style={{
-            color: "#e2e8f0", fontSize: 15, lineHeight: "1.5",
-            background: "rgba(14,165,233,0.12)",
-            border: "1px solid rgba(14,165,233,0.25)",
-            borderRadius: 14, padding: "8px 16px",
+            color: "#e2e8f0", fontSize: 14, lineHeight: 1.55,
+            background: "rgba(14,165,233,0.09)",
+            border: "1px solid rgba(14,165,233,0.20)",
+            borderRadius: 16, padding: "10px 18px",
             fontStyle: "italic",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
           }}>
             "{transcript}"
           </div>
         )}
         {state === "speaking" && lastReply && (
           <div style={{
-            color: "#e2e8f0", fontSize: 14, lineHeight: "1.55",
-            background: "rgba(16,185,129,0.1)",
-            border: "1px solid rgba(16,185,129,0.2)",
-            borderRadius: 14, padding: "8px 16px",
+            color: "#e2e8f0", fontSize: 14, lineHeight: 1.55,
+            background: "rgba(16,185,129,0.08)",
+            border: "1px solid rgba(16,185,129,0.18)",
+            borderRadius: 16, padding: "10px 18px",
             display: "-webkit-box",
             WebkitLineClamp: 3,
             WebkitBoxOrient: "vertical" as const,
             overflow: "hidden",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
           }}
             dangerouslySetInnerHTML={{ __html: lastReply }}
           />
@@ -368,67 +450,90 @@ export default function Home() {
         onTouchStart={(e) => { e.preventDefault(); startListening(); }}
         onTouchEnd={state === "listening" ? stopListening : undefined}
         onClick={state !== "listening" ? startListening : stopListening}
+        aria-label={state === "listening" ? "Detener escucha" : "Hablar con Ziro"}
+        aria-pressed={state === "listening"}
         style={{
-          width: 64, height: 64, borderRadius: "50%",
+          width: 72, height: 72, borderRadius: "50%",
           background: state === "listening"
             ? `linear-gradient(135deg, ${c.primary}, ${c.secondary})`
-            : "rgba(255,255,255,0.07)",
-          border: `2px solid ${state === "listening" ? c.primary : "rgba(255,255,255,0.12)"}`,
+            : "rgba(255,255,255,0.055)",
+          border: `1.5px solid ${state === "listening" ? c.primary : "rgba(255,255,255,0.10)"}`,
           cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: state === "listening" ? `0 0 24px ${c.primary}88` : "none",
-          transition: "all 0.3s ease",
-          marginBottom: 12,
+          boxShadow: state === "listening"
+            ? `0 0 30px ${c.primary}88, 0 0 64px ${c.primary}2e`
+            : "0 4px 24px rgba(0,0,0,0.32)",
+          transition: "all 0.25s ease",
+          marginBottom: 10,
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          flexShrink: 0,
         }}
       >
-        <svg viewBox="0 0 24 24" style={{ width: 26, height: 26, fill: state === "listening" ? "white" : "rgba(255,255,255,0.6)" }}>
+        <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"
+          style={{ fill: state === "listening" ? "white" : "rgba(255,255,255,0.52)", transition: "fill 0.25s ease" }}>
           <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
         </svg>
       </button>
 
-      <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 11, letterSpacing: 2, marginBottom: 8 }}>
-        {state === "listening" ? "SUELTA PARA ENVIAR" : "TOCA PARA HABLAR"}
+      <div style={{
+        color: "rgba(255,255,255,0.18)", fontSize: 10,
+        letterSpacing: "0.22em", textTransform: "uppercase",
+        marginBottom: 8,
+        userSelect: "none",
+      }}>
+        {state === "listening" ? "Suelta para enviar" : "Toca para hablar"}
       </div>
 
       {micError && (
-        <div style={{
+        <div role="alert" style={{
           maxWidth: 360, width: "90%",
-          background: "rgba(239,68,68,0.12)",
-          border: "1px solid rgba(239,68,68,0.35)",
-          borderRadius: 12, padding: "8px 16px",
+          background: "rgba(239,68,68,0.09)",
+          border: "1px solid rgba(239,68,68,0.28)",
+          borderRadius: 14, padding: "10px 18px",
           color: "#fca5a5", fontSize: 12, textAlign: "center",
           marginBottom: 8,
+          backdropFilter: "blur(8px)",
         }}>
-          ⚠️ {micError}
+          ⚠ {micError}
         </div>
       )}
 
-      {/* ── Chat panel — slide up from bottom ── */}
-      <div style={{
-        position: "fixed",
-        bottom: showChat ? 0 : "-100%",
-        left: 0, right: 0,
-        height: "55vh",
-        background: "rgba(9,9,11,0.96)",
-        backdropFilter: "blur(24px)",
-        borderTop: `1px solid ${c.primary}33`,
-        borderRadius: "24px 24px 0 0",
-        display: "flex", flexDirection: "column",
-        transition: "bottom 0.4s cubic-bezier(0.32,0.72,0,1), border-color 0.6s ease",
-        zIndex: 40,
-      }}>
+      {/* ══════════════════════════════════════════
+          Chat panel — slide up from bottom
+      ══════════════════════════════════════════ */}
+      <div
+        role="dialog"
+        aria-label="Chat con Ziro"
+        aria-hidden={!showChat}
+        style={{
+          position: "fixed",
+          bottom: showChat ? 0 : "-100%",
+          left: 0, right: 0,
+          height: "55svh",
+          background: "rgba(6,6,10,0.95)",
+          backdropFilter: "blur(28px)",
+          WebkitBackdropFilter: "blur(28px)",
+          borderTop: `1px solid ${c.primary}24`,
+          borderRadius: "24px 24px 0 0",
+          display: "flex", flexDirection: "column",
+          transition: "bottom 0.38s cubic-bezier(0.32,0.72,0,1), border-color 0.6s ease",
+          zIndex: 40,
+          boxShadow: "0 -8px 48px rgba(0,0,0,0.55)",
+        }}
+      >
         {/* Drag handle */}
         <div style={{
-          width: 40, height: 4, borderRadius: 2,
-          background: "rgba(255,255,255,0.15)",
-          margin: "12px auto 4px",
+          width: 36, height: 4, borderRadius: 2,
+          background: "rgba(255,255,255,0.10)",
+          margin: "14px auto 6px",
           flexShrink: 0,
         }} />
 
         {/* Messages */}
         <div style={{
           flex: 1, overflowY: "auto",
-          padding: "12px 20px",
+          padding: "8px 20px 12px",
           display: "flex", flexDirection: "column", gap: 10,
         }}>
           {messages.map((msg, i) => (
@@ -438,12 +543,11 @@ export default function Home() {
               borderRadius: msg.sender === "bot" ? "16px 16px 16px 4px" : "16px 16px 4px 16px",
               alignSelf: msg.sender === "bot" ? "flex-start" : "flex-end",
               background: msg.sender === "bot"
-                ? `${c.primary}18`
+                ? `${c.primary}13`
                 : `linear-gradient(135deg, ${c.primary}, ${c.secondary})`,
-              border: msg.sender === "bot" ? `1px solid ${c.primary}28` : "none",
+              border: msg.sender === "bot" ? `1px solid ${c.primary}22` : "none",
               color: "#f8fafc",
-              fontSize: 14,
-              lineHeight: "1.55",
+              fontSize: 14, lineHeight: 1.55,
               transition: "background 0.6s ease, border-color 0.6s ease",
             }}
               dangerouslySetInnerHTML={{ __html: msg.text }}
@@ -452,14 +556,14 @@ export default function Home() {
           {state === "thinking" && (
             <div style={{
               alignSelf: "flex-start",
-              background: `${c.primary}18`,
-              border: `1px solid ${c.primary}28`,
+              background: `${c.primary}13`,
+              border: `1px solid ${c.primary}22`,
               borderRadius: "16px 16px 16px 4px",
               padding: "12px 16px",
               display: "flex", gap: 5, alignItems: "center",
-            }}>
+            }} aria-label="Ziro está procesando...">
               {[0, 0.2, 0.4].map((d, i) => (
-                <div key={i} style={{
+                <div key={i} aria-hidden="true" style={{
                   width: 7, height: 7, background: c.primary, borderRadius: "50%",
                   animation: `bounce 1.2s ease-in-out ${d}s infinite`,
                 }} />
@@ -469,43 +573,54 @@ export default function Home() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Text input */}
+        {/* Text input row */}
         <div style={{
-          padding: "12px 16px",
-          borderTop: "1px solid rgba(255,255,255,0.06)",
-          display: "flex", gap: 10,
+          padding: "10px 14px 14px",
+          borderTop: "1px solid rgba(255,255,255,0.05)",
+          display: "flex", gap: 8,
           flexShrink: 0,
         }}>
+          <label htmlFor="chat-input" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", opacity: 0 }}>
+            Mensaje para Ziro
+          </label>
           <input
+            id="chat-input"
             type="text"
             placeholder="Escribe un mensaje..."
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === "Enter" && sendMessage(input)}
             disabled={state === "thinking"}
+            autoComplete="off"
             style={{
               flex: 1,
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 12, padding: "10px 16px",
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 14, padding: "10px 16px",
               color: "#f8fafc", fontSize: 14, outline: "none",
               fontFamily: "inherit",
+              transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+              minHeight: 44,
             }}
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={state === "thinking" || !input.trim()}
+            aria-label="Enviar mensaje"
             style={{
-              width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+              width: 44, height: 44, borderRadius: 14, flexShrink: 0,
               background: state === "thinking" || !input.trim()
-                ? "rgba(139,92,246,0.25)"
+                ? "rgba(139,92,246,0.18)"
                 : `linear-gradient(135deg, ${c.primary}, ${c.secondary})`,
-              border: "none", cursor: "pointer",
+              border: "none", cursor: state === "thinking" || !input.trim() ? "not-allowed" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "background 0.3s ease",
+              transition: "background 0.25s ease, box-shadow 0.25s ease",
+              boxShadow: !input.trim() ? "none" : `0 0 18px ${c.primary}44`,
+              opacity: state === "thinking" ? 0.45 : 1,
             }}
           >
-            <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, fill: "white", marginLeft: 2 }}>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"
+              style={{ fill: "white", marginLeft: 2 }}>
               <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
             </svg>
           </button>
@@ -513,12 +628,13 @@ export default function Home() {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { overflow: hidden; background: #07070a; }
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { -webkit-text-size-adjust: 100%; }
+        body { overflow: hidden; background: #050508; }
 
         @keyframes breathe {
-          0%, 100% { transform: scale(1);   opacity: 0.85; }
+          0%, 100% { transform: scale(1);    opacity: 0.85; }
           50%       { transform: scale(1.06); opacity: 1; }
         }
         @keyframes orbActive {
@@ -526,24 +642,24 @@ export default function Home() {
           50%       { transform: scale(1.08); opacity: 0.9; }
         }
         @keyframes ringIdle {
-          0%, 100% { transform: scale(1);    opacity: 0.4; }
-          50%       { transform: scale(1.04); opacity: 0.6; }
+          0%, 100% { transform: scale(1);    opacity: 0.35; }
+          50%       { transform: scale(1.04); opacity: 0.55; }
         }
         @keyframes ringPulse {
           0%   { transform: scale(1);    opacity: 0.7; }
-          60%  { transform: scale(1.15); opacity: 0.2; }
+          60%  { transform: scale(1.15); opacity: 0.15; }
           100% { transform: scale(1.22); opacity: 0; }
         }
         @keyframes glowPulse {
-          0%, 100% { transform: scale(1);    opacity: 0.7; }
-          50%       { transform: scale(1.2);  opacity: 1; }
+          0%, 100% { transform: scale(1);   opacity: 0.7; }
+          50%       { transform: scale(1.2); opacity: 1; }
         }
         @keyframes dotPulse {
           0%, 100% { transform: scale(1);   opacity: 0.9; }
           50%       { transform: scale(1.5); opacity: 0.5; }
         }
         @keyframes dotBreath {
-          0%, 100% { transform: scale(1);    opacity: 0.45; }
+          0%, 100% { transform: scale(1);    opacity: 0.4; }
           50%       { transform: scale(1.25); opacity: 0.7; }
         }
         @keyframes bounce {
@@ -553,9 +669,27 @@ export default function Home() {
 
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.3); border-radius: 2px; }
-        input::placeholder { color: rgba(255,255,255,0.25); }
-        input:focus { border-color: rgba(139,92,246,0.5) !important; }
+        ::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.28); border-radius: 2px; }
+
+        #chat-input::placeholder { color: rgba(255,255,255,0.20); }
+        #chat-input:focus {
+          border-color: rgba(139,92,246,0.40) !important;
+          box-shadow: 0 0 0 3px rgba(139,92,246,0.10);
+        }
+        #chat-input:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        [role="button"]:focus-visible,
+        button:focus-visible {
+          outline: 2px solid rgba(139,92,246,0.7);
+          outline-offset: 3px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          *, *::before, *::after {
+            animation-duration: 0.01ms !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
       `}</style>
     </div>
   );
