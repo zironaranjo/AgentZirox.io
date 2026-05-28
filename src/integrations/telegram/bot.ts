@@ -81,9 +81,9 @@ export async function startTelegramBot() {
             ? (process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile')
             : provider === 'hermes'
                 ? (process.env.HERMES_MODEL ?? 'hermes-3-llama-3.1-70b')
-                : (process.env.OPENROUTER_MODEL ?? 'anthropic/claude-3.5-sonnet');
+                : (process.env.OPENROUTER_MODEL ?? 'anthropic/claude-sonnet-4.6');
         const toolsModel = provider === 'openrouter'
-            ? (process.env.OPENROUTER_TOOLS_MODEL ?? process.env.OPENROUTER_MODEL ?? 'anthropic/claude-3.5-sonnet')
+            ? (process.env.OPENROUTER_TOOLS_MODEL ?? process.env.OPENROUTER_MODEL ?? 'anthropic/claude-sonnet-4.6')
             : null;
         await ctx.reply(
             `🟢 **AgenteZirox** — Online\n` +

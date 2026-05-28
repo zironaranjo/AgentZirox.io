@@ -203,7 +203,7 @@ export async function callLLMSimple(
         return (res.choices[0]?.message?.content ?? '').trim();
     }
 
-    const model = process.env.OPENROUTER_MODEL ?? 'anthropic/claude-3.5-sonnet';
+    const model = process.env.OPENROUTER_MODEL ?? 'anthropic/claude-sonnet-4.6';
     const fallbackModel =
         process.env.OPENROUTER_FALLBACK_MODEL?.trim() || 'google/gemini-2.0-flash-001';
     const retries = Math.min(
@@ -274,7 +274,7 @@ async function callGroq(messages: ChatMessage[], tools?: LLMTool[]): Promise<LLM
 
 async function callOpenRouter(messages: ChatMessage[], tools?: LLMTool[]): Promise<LLMResponse> {
     const hasTools = Boolean(tools && tools.length > 0);
-    const chatModel = process.env.OPENROUTER_MODEL ?? 'anthropic/claude-3.5-sonnet';
+    const chatModel = process.env.OPENROUTER_MODEL ?? 'anthropic/claude-sonnet-4.6';
     const toolsModel = process.env.OPENROUTER_TOOLS_MODEL ?? chatModel;
     const model = hasTools ? toolsModel : chatModel;
 
@@ -331,7 +331,7 @@ async function callOpenRouter(messages: ChatMessage[], tools?: LLMTool[]): Promi
                 const msg = err instanceof Error ? err.message : String(err);
                 if (msg.includes('No endpoints found that support tool use')) {
                     throw new Error(
-                        `El modelo "${modelName}" no soporta tools en OpenRouter. Configura OPENROUTER_TOOLS_MODEL con uno compatible (ej: anthropic/claude-3.5-sonnet).`
+                        `El modelo "${modelName}" no soporta tools en OpenRouter. Configura OPENROUTER_TOOLS_MODEL con uno compatible (ej: anthropic/claude-sonnet-4.6).`
                     );
                 }
                 if (!isRateLimitError(err)) throw err;

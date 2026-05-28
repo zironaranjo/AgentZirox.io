@@ -153,7 +153,7 @@ Si usas OpenRouter con un modelo que no soporta tools (por ejemplo algunos endpo
 ```env
 LLM_PROVIDER=openrouter
 OPENROUTER_MODEL=nousresearch/hermes-3-llama-3.1-70b
-OPENROUTER_TOOLS_MODEL=anthropic/claude-3.5-sonnet
+OPENROUTER_TOOLS_MODEL=anthropic/claude-sonnet-4.6
 OPENROUTER_VISION_MODEL=openai/gpt-4o-mini
 ```
 
