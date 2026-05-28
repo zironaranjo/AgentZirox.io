@@ -43,6 +43,14 @@ RUN npm run build
 # Paso 2: compilar server.ts + todo src/ con tsup en formato ESM
 RUN npx tsup \
     --external dotenv \
+    --external remotion \
+    --external @remotion/renderer \
+    --external @remotion/bundler \
+    --external @remotion/cli \
+    --external @remotion/compositor-linux-x64-musl \
+    --external @remotion/compositor-linux-x64-gnu \
+    --external @remotion/compositor-linux-arm64-musl \
+    --external @remotion/compositor-linux-arm64-gnu \
     server.ts \
     src/core/logger.ts \
     src/core/memory.ts \
@@ -85,6 +93,9 @@ RUN npx tsup \
     src/tools/create-infographic-notebooklm.ts \
     src/tools/create-notebooklm-audio.ts \
     src/tools/save-audio.ts \
+    src/lib/remotion-render.ts \
+    src/tools/create-linkedin-video.ts \
+    src/tools/create-tiktok-text-video.ts \
     --format esm --out-dir dist-server --no-dts
 
 ENV NODE_ENV=production
