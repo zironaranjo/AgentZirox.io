@@ -4,6 +4,7 @@ import {
     tiktokPostMode,
     tiktokScopes,
     getTikTokCreatorInfo,
+    getTikTokUserInfo,
 } from '../../../../integrations/tiktok/tiktok-api';
 
 /**
@@ -37,22 +38,37 @@ export async function GET() {
         );
     }
 
+    // Verificación del token compatible con el scope actual:
+    //  - inbox  → user.info.basic (getTikTokUserInfo). El borrador funciona con este scope.
+    //  - direct → creator_info (requiere video.publish + auditoría).
     try {
-        const info = await getTikTokCreatorInfo();
-        return NextResponse.json(
-            {
-                ...base,
-                tokenValid: true,
-                account: {
-                    nickname: info.nickname ?? null,
-                    username: info.username ?? null,
-                },
-                privacyOptions: info.privacyOptions,
-                maxVideoDurationSec: info.maxVideoDurationSec ?? null,
-                canPostPublic: info.privacyOptions.includes('PUBLIC_TO_EVERYONE'),
+        const user = await getTikTokUserInfo();
+        const result: Record<string, unknown> = {
+            ...base,
+            tokenValid: true,
+            account: {
+                displayName: user.displayName ?? null,
+                openId: user.openId ?? null,
             },
-            { status: 200 }
-        );
+            canUploadDraft: true,
+        };
+
+        // Solo en modo direct intentamos creator_info (capacidad de publicación directa).
+        if (mode === 'direct') {
+            try {
+                const info = await getTikTokCreatorInfo();
+                result.privacyOptions = info.privacyOptions;
+                result.maxVideoDurationSec = info.maxVideoDurationSec ?? null;
+                result.canPostPublic = info.privacyOptions.includes('PUBLIC_TO_EVERYONE');
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                result.directPostReady = false;
+                result.directPostError =
+                    'El token no tiene video.publish o la app no está auditada. Re-autoriza en /api/tiktok/auth con TIKTOK_POST_MODE=direct tras aprobar la auditoría. Detalle: ' + msg;
+            }
+        }
+
+        return NextResponse.json(result, { status: 200 });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         return NextResponse.json(

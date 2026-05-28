@@ -7,6 +7,7 @@ const TIKTOK_TOKEN_URL = 'https://open.tiktokapis.com/v2/oauth/token/';
 const TIKTOK_INBOX_INIT_URL = 'https://open.tiktokapis.com/v2/post/publish/inbox/video/init/';
 const TIKTOK_DIRECT_INIT_URL = 'https://open.tiktokapis.com/v2/post/publish/video/init/';
 const TIKTOK_CREATOR_INFO_URL = 'https://open.tiktokapis.com/v2/post/publish/creator_info/query/';
+const TIKTOK_USER_INFO_URL = 'https://open.tiktokapis.com/v2/user/info/';
 
 /** Modo de publicación efectivo. Default: inbox (borrador), seguro y sin auditoría. */
 export function tiktokPostMode(): 'inbox' | 'direct' {
@@ -174,6 +175,36 @@ export async function getTikTokCreatorInfo(): Promise<TikTokCreatorInfo> {
         commentDisabled: data.data?.comment_disabled,
         duetDisabled: data.data?.duet_disabled,
         stitchDisabled: data.data?.stitch_disabled,
+    };
+}
+
+export interface TikTokUserInfo {
+    openId?: string;
+    displayName?: string;
+    avatarUrl?: string;
+}
+
+/**
+ * Verifica que el access token es válido usando el scope user.info.basic
+ * (disponible tanto en modo inbox como direct). No publica nada.
+ */
+export async function getTikTokUserInfo(): Promise<TikTokUserInfo> {
+    const token = await getAccessToken();
+    const url = `${TIKTOK_USER_INFO_URL}?fields=open_id,display_name,avatar_url`;
+    const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json() as {
+        data?: { user?: { open_id?: string; display_name?: string; avatar_url?: string } };
+        error?: { code?: string; message?: string };
+    };
+    if (!res.ok || (data.error?.code && data.error.code !== 'ok')) {
+        throw new Error(`TikTok user_info failed: ${data.error?.message ?? JSON.stringify(data)}`);
+    }
+    return {
+        openId: data.data?.user?.open_id,
+        displayName: data.data?.user?.display_name,
+        avatarUrl: data.data?.user?.avatar_url,
     };
 }
 
