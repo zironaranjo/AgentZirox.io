@@ -185,7 +185,7 @@ registerTool({
 registerTool({
     name: 'create_from_style',
     description:
-        'Prepara la creación de un contenido nuevo imitando una receta de estilo guardada, sobre un tema concreto. Devuelve la receta y el tema para que generes un GUION + texto del post (caption con hashtags) en español. Si el usuario quiere el vídeo, después llama generate_video con un prompt que incluya la narración en español del guion (Veo genera vídeo con voz). Úsala cuando el usuario diga "crea un vídeo estilo X sobre Y".',
+        'Prepara la creación de un contenido nuevo imitando una receta de estilo guardada (de un TikTok/Reel que le gustó al usuario), sobre un tema concreto. Devuelve la receta y el tema. DESPUÉS debes llamar create_short_video en el MISMO turno (o inmediatamente después) con segments[] siguiendo hook+estructura+CTA de la receta, motion veo, veo_clips 2, voz jorge y caption con hashtags. PROHIBIDO generate_video para esto (no tiene voz ni subtítulos). Úsala cuando digan "clona este estilo", "haz uno parecido", "crea un vídeo estilo X sobre Y".',
     parameters: {
         type: 'object',
         properties: {
@@ -216,10 +216,11 @@ registerTool({
             `- Duración objetivo: ~${recipe.durationSec}s`,
             `- Hashtags base: ${recipe.hashtags.join(' ') || '(propón los más adecuados)'}`,
             '',
-            'GENERA EN ESPAÑOL:',
-            '1) GUION con marcas de tiempo siguiendo la estructura (incluye el hook literal de los primeros segundos).',
-            '2) TEXTO DEL POST (caption) con hashtags para TikTok.',
-            '3) Si el usuario pidió el vídeo, llama generate_video con un prompt visual + la narración en off en español del guion.',
+            'GENERA EN ESPAÑOL y LLAMA create_short_video:',
+            '1) segments[] = frases cortas del guion (hook primero, luego bloques de la estructura, CTA al final).',
+            '2) caption = texto del post TikTok con hashtags (incluye los de la receta si encajan).',
+            '3) create_short_video: motion "veo", veo_clips 2, voice "jorge", scene_prompts acordes al tema.',
+            '4) NO uses generate_video ni create_tiktok_text_video salvo que el usuario pida solo texto sin voz.',
         ].join('\n');
     },
 });

@@ -124,6 +124,9 @@ export function routeIntent(
 
         const liMatch = lastBotContent.match(/\/li_approve\s+(\d+)/);
         if (liMatch) return { type: 'approve_linkedin', postId: parseInt(liMatch[1], 10) };
+
+        const ttMatch = lastBotContent.match(/\/tt_approve\s+(\d+)/i);
+        if (ttMatch) return { type: 'approve_tiktok', postId: parseInt(ttMatch[1], 10) };
     }
 
     // ── 2. Save image — explicit ("imagen"/"foto" in message) ─────────────────
