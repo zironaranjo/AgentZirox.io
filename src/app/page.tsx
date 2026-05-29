@@ -210,7 +210,7 @@ export default function Home() {
             width: "100%", height: "100%", borderRadius: "50%",
             overflow: "hidden", background: "#0f172a", position: "relative",
           }}>
-            <Image src="/agent-portrait.jpg" alt="Ziro" fill style={{ objectFit: "cover", objectPosition: "top center" }} priority />
+            <Image src="/zirox.png" alt="Ziro" fill style={{ objectFit: "cover", objectPosition: "top center" }} priority />
           </div>
         </div>
 
@@ -333,7 +333,7 @@ export default function Home() {
           }}
         >
           <Image
-            src="/agent-portrait.jpg"
+            src="/zirox.png"
             alt="Ziro — Agente IA"
             fill
             style={{ objectFit: "cover", objectPosition: "top center" }}
