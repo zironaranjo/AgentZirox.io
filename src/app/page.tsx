@@ -32,10 +32,6 @@ export default function Home() {
   const messagesEndRef              = useRef<HTMLDivElement>(null);
   const recogRef                    = useRef<any>(null);
   const speakTimerRef               = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const canvasRef                   = useRef<HTMLCanvasElement>(null);
-  const rotYRef                     = useRef(0);
-  const primaryColorRef             = useRef(COLORS.idle.primary);
-  const isActiveRef                 = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -62,89 +58,6 @@ export default function Home() {
     if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
   }, []);
 
-  // Keep refs in sync with state (avoids restarting the canvas loop)
-  useEffect(() => { primaryColorRef.current = COLORS[state].primary; }, [state]);
-  useEffect(() => { isActiveRef.current = state !== "idle"; }, [state]);
-
-  // Particle sphere — Fibonacci distribution, runs once
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d')!;
-    if (!ctx) return;
-
-    const W = canvas.width;
-    const H = canvas.height;
-    const CX = W / 2;
-    const CY = H / 2;
-    const SPHERE_R = W * 0.44;
-    const N = 480;
-
-    // Fibonacci sphere for even particle distribution
-    const pts: { x: number; y: number; z: number }[] = [];
-    const golden = Math.PI * (1 + Math.sqrt(5));
-    for (let i = 0; i < N; i++) {
-      const theta = Math.acos(1 - 2 * (i + 0.5) / N);
-      const phi = golden * i;
-      pts.push({
-        x: Math.sin(theta) * Math.cos(phi),
-        y: Math.sin(theta) * Math.sin(phi),
-        z: Math.cos(theta),
-      });
-    }
-
-    // Slight downward tilt for depth feel
-    const TILT = 0.22;
-    const cosT = Math.cos(TILT);
-    const sinT = Math.sin(TILT);
-
-    function hexRgb(hex: string): string {
-      const n = parseInt(hex.replace('#', ''), 16);
-      return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
-    }
-
-    let raf: number;
-    let last = 0;
-
-    function draw(t: number) {
-      const dt = Math.min((t - last) / 1000, 0.05);
-      last = t;
-
-      rotYRef.current += isActiveRef.current ? 0.007 : 0.0025;
-      const cosY = Math.cos(rotYRef.current);
-      const sinY = Math.sin(rotYRef.current);
-      const rgb = hexRgb(primaryColorRef.current);
-
-      ctx.clearRect(0, 0, W, H);
-
-      const sorted = pts
-        .map(p => {
-          // Rotate around Y axis
-          const x1 = p.x * cosY - p.z * sinY;
-          const z1 = p.x * sinY + p.z * cosY;
-          // Tilt around X axis
-          const y2 = p.y * cosT - z1 * sinT;
-          const z2 = p.y * sinT + z1 * cosT;
-          return { px: CX + x1 * SPHERE_R, py: CY + y2 * SPHERE_R, depth: z2 };
-        })
-        .sort((a, b) => a.depth - b.depth); // back-to-front
-
-      for (const { px, py, depth } of sorted) {
-        const d = (depth + 1) / 2; // normalize 0..1
-        const radius = 0.6 + d * 2.0;
-        const alpha  = 0.06 + d * 0.90;
-        ctx.beginPath();
-        ctx.arc(px, py, radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${rgb},${alpha.toFixed(2)})`;
-        ctx.fill();
-      }
-
-      raf = requestAnimationFrame(draw);
-    }
-
-    raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -297,7 +210,7 @@ export default function Home() {
             width: "100%", height: "100%", borderRadius: "50%",
             overflow: "hidden", background: "#0f172a", position: "relative",
           }}>
-            <Image src="/avatar.png" alt="Ziro" fill style={{ objectFit: "cover" }} priority />
+            <Image src="/agent-portrait.jpg" alt="Ziro" fill style={{ objectFit: "cover", objectPosition: "top center" }} priority />
           </div>
         </div>
 
@@ -349,19 +262,19 @@ export default function Home() {
       </div>
 
       {/* ══════════════════════════════════════════
-          Central Granular Orb
+          Agent Portrait
       ══════════════════════════════════════════ */}
       <div style={{
         position: "relative",
-        width: 340, height: 340,
+        width: 260, height: 360,
         display: "flex", alignItems: "center", justifyContent: "center",
-        marginBottom: 32,
+        marginBottom: 24,
       }}>
 
         {/* Ring 3 — outermost */}
         <div style={{
           position: "absolute",
-          width: isActive ? 358 : 296, height: isActive ? 358 : 296,
+          width: isActive ? 400 : 330, height: isActive ? 400 : 330,
           borderRadius: "50%",
           border: `1px solid ${c.primary}18`,
           animation: isActive ? "ringPulse 2s ease-out infinite" : "ringIdle 4s ease-in-out infinite",
@@ -372,7 +285,7 @@ export default function Home() {
         {/* Ring 2 */}
         <div style={{
           position: "absolute",
-          width: isActive ? 304 : 256, height: isActive ? 304 : 256,
+          width: isActive ? 342 : 286, height: isActive ? 342 : 286,
           borderRadius: "50%",
           border: `1px solid ${c.primary}2c`,
           animation: isActive ? "ringPulse 2s ease-out infinite" : "ringIdle 4s ease-in-out infinite",
@@ -383,7 +296,7 @@ export default function Home() {
         {/* Ring 1 — innermost */}
         <div style={{
           position: "absolute",
-          width: isActive ? 252 : 220, height: isActive ? 252 : 220,
+          width: isActive ? 284 : 244, height: isActive ? 284 : 244,
           borderRadius: "50%",
           border: `1px solid ${c.primary}4c`,
           animation: isActive ? "ringPulse 2s ease-out infinite" : "ringIdle 4s ease-in-out infinite",
@@ -391,36 +304,50 @@ export default function Home() {
           animationDelay: "0.76s",
         }} />
 
-        {/* Glow bloom behind canvas */}
+        {/* Glow bloom */}
         <div style={{
           position: "absolute",
-          width: isActive ? 240 : 200, height: isActive ? 240 : 200,
-          borderRadius: "50%",
-          background: `radial-gradient(circle, ${c.primary}38 0%, ${c.secondary}18 50%, transparent 75%)`,
-          filter: "blur(28px)",
+          width: isActive ? 280 : 220, height: isActive ? 380 : 300,
+          background: `radial-gradient(ellipse, ${c.primary}30 0%, ${c.secondary}14 50%, transparent 75%)`,
+          filter: "blur(44px)",
           animation: isActive ? "glowPulse 1.5s ease-in-out infinite" : "breathe 4s ease-in-out infinite",
           transition: "background 0.6s ease, width 0.5s ease, height 0.5s ease",
           pointerEvents: "none",
         }} />
 
-        {/* Particle sphere canvas */}
-        <canvas
-          ref={canvasRef}
-          width={300}
-          height={300}
+        {/* Portrait — soft edge blend via mask-image */}
+        <div
           role="button"
           tabIndex={0}
           aria-label={state === "listening" ? "Detener escucha" : "Iniciar escucha"}
           onClick={state === "listening" ? stopListening : startListening}
           onKeyDown={e => e.key === "Enter" && (state === "listening" ? stopListening() : startListening())}
           style={{
-            position: "relative",
+            position: "relative", width: "100%", height: "100%",
             cursor: "pointer",
+            maskImage: "radial-gradient(ellipse 86% 82% at 50% 38%, black 35%, rgba(0,0,0,0.75) 52%, rgba(0,0,0,0.2) 66%, transparent 80%)",
+            WebkitMaskImage: "radial-gradient(ellipse 86% 82% at 50% 38%, black 35%, rgba(0,0,0,0.75) 52%, rgba(0,0,0,0.2) 66%, transparent 80%)",
             animation: isActive ? "orbActive 0.9s ease-in-out infinite" : "breathe 4s ease-in-out infinite",
-            filter: `drop-shadow(0 0 18px ${c.primary}66) drop-shadow(0 0 48px ${c.primary}2e)`,
+            filter: `drop-shadow(0 0 28px ${c.primary}50) drop-shadow(0 0 56px ${c.primary}22)`,
             transition: "filter 0.6s ease",
           }}
-        />
+        >
+          <Image
+            src="/agent-portrait.jpg"
+            alt="Ziro — Agente IA"
+            fill
+            style={{ objectFit: "cover", objectPosition: "top center" }}
+            priority
+          />
+          {/* State-reactive color wash */}
+          <div style={{
+            position: "absolute", inset: 0,
+            background: `radial-gradient(ellipse at 50% 28%, ${c.primary}22 0%, transparent 62%)`,
+            mixBlendMode: "soft-light",
+            transition: "background 0.8s ease",
+            pointerEvents: "none",
+          }} />
+        </div>
       </div>
 
       {/* ── Status pill ── */}
