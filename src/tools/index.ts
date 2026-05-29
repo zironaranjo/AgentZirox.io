@@ -46,5 +46,6 @@ import './content-style';
 import './create-short-video';
 import './create-linkedin-video';
 import './create-tiktok-text-video';
+import './run-marketing-audit';
 import './obsidian';
 import './desktop';

@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y \
 COPY scripts/requirements-notebooklm.txt ./scripts/
 RUN pip3 install --break-system-packages --upgrade pip \
     && pip3 install --break-system-packages --no-cache-dir -r scripts/requirements-notebooklm.txt \
+    && pip3 install --break-system-packages --no-cache-dir reportlab \
     && python3 -m playwright install-deps chromium \
     && python3 -m playwright install chromium
 
@@ -98,8 +99,10 @@ RUN npx tsup \
     src/tools/create-notebooklm-audio.ts \
     src/tools/save-audio.ts \
     src/lib/remotion-render.ts \
+    src/lib/marketing-analyze.ts \
     src/tools/create-linkedin-video.ts \
     src/tools/create-tiktok-text-video.ts \
+    src/tools/run-marketing-audit.ts \
     --format esm --out-dir dist-server --no-dts
 
 ENV NODE_ENV=production

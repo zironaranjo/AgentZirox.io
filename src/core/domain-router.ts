@@ -13,6 +13,7 @@ export type Domain =
     | 'knowledge'    // internal knowledge base CRUD
     | 'memory'       // user profile / remember_about_user
     | 'notes'        // Obsidian vault notes (read/write/search)
+    | 'marketing'    // marketing audits, reports
     | 'general';     // ambiguous / cross-domain → expose all tools
 
 // Tools shown exclusively for each domain (augmented with CORE_TOOLS at runtime).
@@ -87,6 +88,11 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
     memory: [
         'search_memory', 'remember_about_user', 'update_user_context', 'clear_memory',
     ],
+    marketing: [
+        'run_marketing_audit',
+        'web_search', 'fetch_url', 'browser_screenshot',
+        'generate_image',
+    ],
     general: [],
 };
 
@@ -135,6 +141,8 @@ export function classifyDomain(msg: string): Domain {
 
     if (/\b(screenshot|captura\s+(de\s+)?pantalla|captura\s+(la\s+)?web|c[oó]mo\s+se\s+ve|foto\s+de\s+la\s+web|toma\s+una\s+captura)\b/.test(t)) return 'research';
     if (/\b(busca|investiga|precio|cu[aá]nto\s+(cuesta|vale|cuestan)|qu[eé]\s+es|d[oó]nde\s+(est[aá]|comprar)|p[aá]gina\s+web|url|noticias|informaci[oó]n\s+sobre)\b/.test(t)) return 'research';
+
+    if (/\b(auditor[ií]a.*marketing|marketing.*audit|analiza.*marketing|revisa.*marketing|marketing.*web|reporte.*marketing|audit.*web|analiza.*web.*marketing|puntuaci[oó]n.*marketing|score.*marketing)\b/.test(t)) return 'marketing';
 
     if (/\b(añade\s+conocimiento|guarda.*conocimiento|base\s+de\s+conocimiento|aprende|nuevo\s+conocimiento|conocimiento\s+sobre)\b/.test(t)) return 'knowledge';
 
