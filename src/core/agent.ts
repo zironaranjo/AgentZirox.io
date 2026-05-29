@@ -6,6 +6,7 @@ import { runWithToolContext } from './tool-context';
 import { routeIntent } from './intent-router';
 import { classifyDomain, getDomainToolSet } from './domain-router';
 import { detectTaskHallucination, requiresTaskAction, taskActionRetryHint } from './task-intent';
+import { isDailyInfographicTask } from './search-locale';
 
 // Bootstrap all tools on first import
 import '../tools/index';
@@ -65,6 +66,33 @@ const IMAGE_RECEIVAL_EXCLUDED_TOOLS = new Set(['save_image', 'list_images', 'gen
 
 // Tools excluded when a scheduled task fires — prevents re-scheduling and re-saving the same task.
 const SCHEDULED_EXEC_EXCLUDED_TOOLS = new Set(['schedule_task', 'list_scheduled_tasks', 'cancel_scheduled_task', 'save_agent_task', 'list_agent_tasks']);
+
+function shouldStopAfterTool(
+    toolName: string,
+    userMessage: string,
+    executedToolNames: string[]
+): boolean {
+    if (!STOP_AFTER_TOOLS.has(toolName)) return false;
+    // Infografía programada + LinkedIn: continuar hasta linkedin_propose_post
+    if (
+        userMessage.startsWith('⏰ **Tarea programada**') &&
+        isDailyInfographicTask(userMessage)
+    ) {
+        if (
+            (toolName === 'create_infographic_notebooklm' || toolName === 'create_infographic') &&
+            !executedToolNames.includes('linkedin_propose_post')
+        ) {
+            return false;
+        }
+        if (toolName === 'web_search') return false;
+    }
+    return true;
+}
+
+function extractPngUrlFromToolResult(result: string): string | null {
+    const m = result.match(/🔗\s*(?:PNG:\s*)?(https:\/\/\S+)/);
+    return m?.[1] ?? null;
+}
 
 async function processMessageInner(chatId: string, userMessage: string): Promise<string> {
     const traceId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -192,9 +220,13 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
     // isImageReceival overrides domain (strongest signal).
     // 'general' domain → null toolSet → expose all tools (backward-compatible).
     const isScheduledTaskFire = userMessage.startsWith('⏰ **Tarea programada**');
+    const isScheduledInfographic = isScheduledTaskFire && isDailyInfographicTask(userMessage);
     let tools: typeof allTools;
     if (isImageReceival) {
         tools = allTools.filter(t => !IMAGE_RECEIVAL_EXCLUDED_TOOLS.has(t.name));
+    } else if (isScheduledInfographic) {
+        // Flujo multi-paso: búsqueda + infografía + LinkedIn — no filtrar por dominio notes
+        tools = allTools;
     } else {
         const domain = classifyDomain(userMessage);
         const domainToolSet = getDomainToolSet(domain);
@@ -242,12 +274,23 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
     }
 
     if (isScheduledTaskFire) {
-        conversation.push({
-            role: 'system',
-            content:
-                '[SISTEMA] Recordatorio automático. Responde en 1–3 frases cortas (máx 300 caracteres). ' +
-                'Sin preguntas al final. NO uses obsidian_read ni otras tools salvo que la instrucción lo pida explícitamente.',
-        });
+        if (isScheduledInfographic) {
+            conversation.push({
+                role: 'system',
+                content:
+                    '[SISTEMA] Tarea programada de infografía + LinkedIn. OBLIGATORIO en este turno: ' +
+                    '1) web_search (noticias IA español), 2) create_infographic_notebooklm (o create_infographic si falla), ' +
+                    '3) linkedin_propose_post con image_url del PNG. NO pares tras la infografía. ' +
+                    'NO uses schedule_task ni save_agent_task.',
+            });
+        } else {
+            conversation.push({
+                role: 'system',
+                content:
+                    '[SISTEMA] Recordatorio automático. Responde en 1–3 frases cortas (máx 300 caracteres). ' +
+                    'Sin preguntas al final. NO uses obsidian_read ni otras tools salvo que la instrucción lo pida explícitamente.',
+            });
+        }
     }
 
     let response = await callLLM(conversation, tools);
@@ -281,7 +324,13 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
             conversation.push(...toolResults);
 
             // Stop immediately after tools with verbatim output (prevents double-call on retry).
-            if (response.toolCalls.some(tc => STOP_AFTER_TOOLS.has(tc.name))) break agentLoop;
+            if (
+                response.toolCalls.some((tc) =>
+                    shouldStopAfterTool(tc.name, userMessage, executedToolNames)
+                )
+            ) {
+                break agentLoop;
+            }
 
             hallucinationRetries = 0;
             // Prevent calling generate_image more than once per request (expensive + confusing).
@@ -351,21 +400,22 @@ function applyImageUrlFix(
 
     let realImageUrl: string | null = null;
 
-    // 1. Current turn results — use LAST generate_image in case it was called multiple times.
-    const genIdx = executedToolNames.lastIndexOf('generate_image');
-    if (genIdx !== -1) {
-        const m = executedToolResults[genIdx].match(/🔗\s*(https:\/\/\S+)/);
-        if (m) realImageUrl = m[1];
+    const imageTools = ['generate_image', 'create_infographic_notebooklm', 'create_infographic'] as const;
+    for (const toolName of imageTools) {
+        const idx = executedToolNames.lastIndexOf(toolName);
+        if (idx !== -1) {
+            realImageUrl = extractPngUrlFromToolResult(executedToolResults[idx]);
+            if (realImageUrl) break;
+        }
     }
 
-    // 2. Conversation history (image generated in a previous turn)
     if (!realImageUrl) {
         for (let i = conversation.length - 1; i >= 0; i--) {
             const msg = conversation[i];
-            if (msg.role === 'user' && msg.content.includes('[Tool Result: generate_image]')) {
-                const m = msg.content.match(/🔗\s*(https:\/\/\S+)/);
-                if (m) { realImageUrl = m[1]; break; }
-            }
+            if (msg.role !== 'user' || !msg.content.includes('[Tool Result:')) continue;
+            if (!imageTools.some((t) => msg.content.includes(`[Tool Result: ${t}]`))) continue;
+            realImageUrl = extractPngUrlFromToolResult(msg.content);
+            if (realImageUrl) break;
         }
     }
 

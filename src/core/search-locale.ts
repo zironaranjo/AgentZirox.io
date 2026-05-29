@@ -65,3 +65,11 @@ export function isAiNewsBriefing(text: string): boolean {
     const hasSearch = /\b(busca|buscar|consulta|investiga|env[ií]a|enviar|manda|cu[eé]nta|resum)\b/.test(t);
     return hasNews && hasAi && (hasSearch || /\bprogramad/.test(t) || t.includes('tarea programada'));
 }
+
+/** Tarea programada: infografía (NotebookLM/AntV) + publicar/proponer en LinkedIn. */
+export function isDailyInfographicTask(text: string): boolean {
+    const t = text.toLowerCase();
+    const hasInfographic = /\binfograf/.test(t);
+    const hasLinkedIn = /\blinkedin\b/.test(t) || /\bpublicar\b/.test(t);
+    return hasInfographic && hasLinkedIn;
+}

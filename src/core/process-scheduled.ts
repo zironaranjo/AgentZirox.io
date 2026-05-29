@@ -7,7 +7,7 @@ import {
     releaseStuckRunningTasks,
 } from './memory';
 import { sendTelegramChatMessage } from '../integrations/telegram/send-message';
-import { isAiNewsBriefing } from './search-locale';
+import { isAiNewsBriefing, isDailyInfographicTask } from './search-locale';
 import { logger } from './logger';
 
 const WA_API_VERSION = 'v19.0';
@@ -91,6 +91,19 @@ function buildScheduledPrompt(instruction: string): string {
         );
     }
 
+    if (isDailyInfographicTask(instruction)) {
+        return (
+            base +
+            'INFOGRAFÍA DIARIA + LINKEDIN (OBLIGATORIO — flujo completo en este turno):\n' +
+            '1) web_search UNA vez: noticias IA hoy en español (Xataka, Hipertextual, Genbeta, etc.).\n' +
+            '2) create_infographic_notebooklm con title, brief, steps[] (3–5) y benefits[] (3–5) basados en las noticias del día.\n' +
+            '   Si NotebookLM no está disponible, usa create_infographic como fallback.\n' +
+            '3) linkedin_propose_post con post_text en español + image_url = URL del PNG devuelto en el paso 2.\n' +
+            '4) NO pares tras la infografía: debes llegar a linkedin_propose_post.\n' +
+            '5) PROHIBIDO inventar noticias. PROHIBIDO schedule_task, save_agent_task ni cancel_scheduled_task.'
+        );
+    }
+
     return (
         base +
         'Entrega el recordatorio al usuario en 1–3 frases, SIEMPRE en español (salvo que pida otro idioma). ' +
@@ -132,10 +145,15 @@ export async function tickScheduledTasksInternal(): Promise<{ processed: number;
                 const prompt = buildScheduledPrompt(task.instruction);
                 const reply = await processMessage(task.chat_id, prompt);
                 const isNews = isAiNewsBriefing(task.instruction);
-                const maxLen = isNews ? 3500 : 500;
+                const isInfographic = isDailyInfographicTask(task.instruction);
+                const maxLen = isNews ? 3500 : isInfographic ? 2000 : 500;
                 const short =
                     reply.length > maxLen ? `${reply.slice(0, maxLen - 1).trim()}…` : reply;
-                const header = isNews ? '📰 *Noticias IA*' : '🔔 *Recordatorio*';
+                const header = isNews
+                    ? '📰 *Noticias IA*'
+                    : isInfographic
+                      ? '📊 *Infografía LinkedIn*'
+                      : '🔔 *Recordatorio*';
                 await deliverScheduledReply(task.chat_id, `${header}\n\n${short}`);
                 await markScheduledTaskDone(task.id);
                 if (task.repeat_interval) {
