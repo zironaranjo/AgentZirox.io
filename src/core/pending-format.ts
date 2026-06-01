@@ -1,4 +1,5 @@
 import type { ScheduledTaskRow } from './memory';
+import { isDailyInfographicTask } from './search-locale';
 
 type AgentTaskRow = {
     id: string | number;
@@ -32,6 +33,7 @@ function formatAgentLine(t: AgentTaskRow): string {
 
 export function isDailyScheduledTask(r: ScheduledTaskRow): boolean {
     if (r.repeat_interval === 'daily') return true;
+    if (isDailyInfographicTask(r.instruction)) return true;
     const t = r.instruction.toLowerCase();
     return (
         /\b(cada\s+d[ií]a|diari[ao]|todos\s+los\s+d[ií]as)\b/.test(t) ||

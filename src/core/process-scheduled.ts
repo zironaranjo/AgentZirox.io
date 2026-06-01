@@ -94,7 +94,7 @@ function buildScheduledPrompt(instruction: string): string {
     if (isDailyInfographicTask(instruction)) {
         return (
             base +
-            'INFOGRAFÍA DIARIA + LINKEDIN (OBLIGATORIO — flujo completo en este turno):\n' +
+            'INFOGRAFÍA + LINKEDIN (OBLIGATORIO — flujo completo en este turno):\n' +
             '1) web_search UNA vez: noticias IA hoy en español (Xataka, Hipertextual, Genbeta, etc.).\n' +
             '2) create_infographic_notebooklm con title, brief, steps[] (3–5) y benefits[] (3–5) basados en las noticias del día.\n' +
             '   Si NotebookLM no está disponible, usa create_infographic como fallback.\n' +

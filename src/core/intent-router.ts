@@ -105,6 +105,11 @@ export function routeIntent(
         return { type: 'llm', isImageReceival: true, cachedImageExists: false };
     }
 
+    // Ejecución automática (cron): no acortar con list_* — debe usar tools (infografía, LinkedIn, etc.)
+    if (msg.startsWith('⏰ **Tarea programada**')) {
+        return { type: 'llm', isImageReceival: false, cachedImageExists: Boolean(getCachedImage(chatId)) };
+    }
+
     // ── 0. Direct slash commands ─────────────────────────────────────────────
     const liApproveCmd = msg.match(/^\/li_approve\s+(\d+)/i);
     if (liApproveCmd) return { type: 'approve_linkedin', postId: parseInt(liApproveCmd[1], 10) };
@@ -213,10 +218,11 @@ export function routeIntent(
         return { type: 'check_duplicate_pending' };
     }
 
-    // ── 11. Tareas diarias ───────────────────────────────────────────────────
+    // ── 11. Tareas diarias (solo cuando el usuario PREGUNTA por la lista) ─────
     if (
-        /\b(tareas?\s+)?diarias?\b/i.test(msg) ||
-        /\b(qu[eé]|que)\s+tareas?\s+(diarias?|tienes)\b/i.test(msg)
+        /\b(lista|listar|muestra|ver|ens[eé]ñame|dime)\b.{0,30}\b(tareas?\s+)?diarias?\b/i.test(msg) ||
+        /\b(qu[eé]|que)\s+tareas?\s+diarias?\b/i.test(msg) ||
+        /\btareas?\s+diarias?\s+(tengo|hay|programad)/i.test(msg)
     ) {
         return { type: 'list_daily_pending' };
     }
