@@ -1,4 +1,5 @@
 import { getCachedImage } from './image-cache';
+import { isDailyInfographicTask } from './search-locale';
 
 // ── Intent types ──────────────────────────────────────────────────────────────
 
@@ -220,9 +221,10 @@ export function routeIntent(
 
     // ── 11. Tareas diarias (solo cuando el usuario PREGUNTA por la lista) ─────
     if (
-        /\b(lista|listar|muestra|ver|ens[eé]ñame|dime)\b.{0,30}\b(tareas?\s+)?diarias?\b/i.test(msg) ||
-        /\b(qu[eé]|que)\s+tareas?\s+diarias?\b/i.test(msg) ||
-        /\btareas?\s+diarias?\s+(tengo|hay|programad)/i.test(msg)
+        !isDailyInfographicTask(msg) &&
+        (/\b(lista|listar|muestra|ver|ens[eé]ñame|dime)\b.{0,30}\b(tareas?\s+)?diarias?\b/i.test(msg) ||
+            /\b(qu[eé]|que)\s+tareas?\s+diarias?\b/i.test(msg) ||
+            /\btareas?\s+diarias?\s+(tengo|hay|programad)/i.test(msg))
     ) {
         return { type: 'list_daily_pending' };
     }

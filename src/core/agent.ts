@@ -73,11 +73,8 @@ function shouldStopAfterTool(
     executedToolNames: string[]
 ): boolean {
     if (!STOP_AFTER_TOOLS.has(toolName)) return false;
-    // Infografía programada + LinkedIn: continuar hasta linkedin_propose_post
-    if (
-        userMessage.startsWith('⏰ **Tarea programada**') &&
-        isDailyInfographicTask(userMessage)
-    ) {
+    // Infografía + LinkedIn (manual o programada): no parar hasta linkedin_propose_post
+    if (isDailyInfographicTask(userMessage)) {
         if (
             (toolName === 'create_infographic_notebooklm' || toolName === 'create_infographic') &&
             !executedToolNames.includes('linkedin_propose_post')
@@ -273,13 +270,15 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         });
     }
 
+    const wantsInfographicLinkedIn = isDailyInfographicTask(userMessage);
+
     if (isScheduledTaskFire) {
-        if (isScheduledInfographic) {
+        if (isScheduledInfographic || wantsInfographicLinkedIn) {
             conversation.push({
                 role: 'system',
                 content:
-                    '[SISTEMA] Tarea programada de infografía + LinkedIn. OBLIGATORIO en este turno: ' +
-                    '1) web_search (noticias IA español), 2) create_infographic_notebooklm (o create_infographic si falla), ' +
+                    '[SISTEMA] Infografía + LinkedIn en este turno. OBLIGATORIO: ' +
+                    '1) web_search (noticias IA español), 2) create_infographic_notebooklm (o create_infographic si falla NotebookLM), ' +
                     '3) linkedin_propose_post con image_url del PNG. NO pares tras la infografía. ' +
                     'NO uses schedule_task ni save_agent_task.',
             });
@@ -291,6 +290,12 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
                     'Sin preguntas al final. NO uses obsidian_read ni otras tools salvo que la instrucción lo pida explícitamente.',
             });
         }
+    } else if (wantsInfographicLinkedIn) {
+        conversation.push({
+            role: 'system',
+            content:
+                '[SISTEMA] El usuario pide infografía + LinkedIn ahora. OBLIGATORIO: web_search → create_infographic_notebooklm → linkedin_propose_post con image_url del PNG. NO pares tras la infografía.',
+        });
     }
 
     let response = await callLLM(conversation, tools);

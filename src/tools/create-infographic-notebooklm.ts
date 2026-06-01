@@ -6,6 +6,7 @@ import { archiveInfographicToNeurona } from '../lib/infographic-neurona';
 import { runNotebooklmInfographic } from '../lib/notebooklm-infographic';
 import { updateInfographicJobPng, uploadInfographicPng } from '../core/storage';
 import { setPendingTelegramImageCaption, setPendingTelegramImageUrl } from './generate-image';
+import { sendTelegramChatMessage } from '../integrations/telegram/send-message';
 
 const DEFAULT_WEBHOOK = 'https://ziroxxn8n.ziroxn8n.site/webhook/agent-infografia-notebooklm';
 
@@ -141,6 +142,13 @@ registerTool({
         });
 
         const jobId = Number(job.job_id);
+
+        if (ctx?.chatId && !ctx.chatId.startsWith('wa_')) {
+            void sendTelegramChatMessage(
+                ctx.chatId,
+                '⏳ Generando infografía con NotebookLM (suele tardar **3–8 min**). Te envío el PNG y el borrador de LinkedIn cuando termine.'
+            ).catch((e) => logger.warn('[create_infographic_notebooklm] Aviso Telegram:', e));
+        }
 
         const { pngBuffer, notebookId, taskId } = await runNotebooklmInfographic({
             title,
