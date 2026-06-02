@@ -7,6 +7,7 @@ import { routeIntent } from './intent-router';
 import { classifyDomain, getDomainToolSet } from './domain-router';
 import { detectTaskHallucination, requiresTaskAction, taskActionRetryHint } from './task-intent';
 import { isDailyInfographicTask } from './search-locale';
+import { startTrace, endTrace, incLlmCalls, incHallucinationRetries, setDomain, setIntent } from './tracer';
 
 // Bootstrap all tools on first import
 import '../tools/index';
@@ -18,7 +19,8 @@ import { buildDuplicateReport, buildListDailyPending } from './pending-format';
  * Handles multi-step tool calling automatically.
  */
 export async function processMessage(chatId: string, userMessage: string): Promise<string> {
-    return runWithToolContext({ chatId }, () => processMessageInner(chatId, userMessage));
+    const traceId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    return runWithToolContext({ chatId, traceId }, () => processMessageInner(chatId, userMessage, traceId));
 }
 
 // Phrases the LLM writes when it describes tool usage in text without calling the tool.
@@ -91,9 +93,9 @@ function extractPngUrlFromToolResult(result: string): string | null {
     return m?.[1] ?? null;
 }
 
-async function processMessageInner(chatId: string, userMessage: string): Promise<string> {
-    const traceId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+async function processMessageInner(chatId: string, userMessage: string, traceId: string): Promise<string> {
     logger.info(`[trace:${traceId}] chatId=${chatId} msg="${userMessage.slice(0, 80)}"`);
+    startTrace(traceId, chatId, userMessage);
 
     await saveMessage(chatId, 'user', userMessage);
 
@@ -109,7 +111,9 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
     // ── Intent classification ─────────────────────────────────────────────────
     const intent = routeIntent(userMessage, lastBotContent, chatId);
     logger.info(`[trace:${traceId}] intent=${intent.type}`);
+    setIntent(traceId, intent.type);
 
+    try {
     // ── Deterministic dispatch (no LLM needed) ────────────────────────────────
     switch (intent.type) {
         case 'save_image': {
@@ -226,6 +230,7 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
         tools = allTools;
     } else {
         const domain = classifyDomain(userMessage);
+        setDomain(traceId, domain);
         const domainToolSet = getDomainToolSet(domain);
         tools = domainToolSet
             ? allTools.filter(t => domainToolSet.has(t.name))
@@ -299,6 +304,7 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
     }
 
     let response = await callLLM(conversation, tools);
+    incLlmCalls(traceId);
 
     let iterations = 0;
     const MAX_ITERATIONS = 8;
@@ -343,6 +349,7 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
                 tools = tools.filter(t => t.name !== 'generate_image');
             }
             response = await callLLM(conversation, tools);
+            incLlmCalls(traceId);
 
         } else {
             // No tool calls — detect hallucination and retry up to MAX_HALLUCINATION_RETRIES.
@@ -356,6 +363,7 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
 
                 if (claimedToolUse) {
                     hallucinationRetries++;
+                    incHallucinationRetries(traceId);
                     logger.warn(`[agent] LLM described tool usage without calling it — retry ${hallucinationRetries}/${MAX_HALLUCINATION_RETRIES}`);
                     const taskHint = requiresTaskAction(userMessage) ? ` ${taskActionRetryHint(userMessage)}` : '';
                     const hint = pendingTools.length > 0
@@ -367,6 +375,7 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
                         content: `SISTEMA: PROHIBIDO describir herramientas en texto. Describiste que usaste una herramienta pero NO la llamaste mediante tool_calls.${hint}${taskHint} DEBES llamarla AHORA usando el mecanismo estructurado de tool_calls. NO escribas más texto explicativo — llama la herramienta directamente. PROHIBIDO inventar IDs de tareas.`,
                     });
                     response = await callLLM(conversation, tools);
+                    incLlmCalls(traceId);
                     continue agentLoop;
                 }
             }
@@ -393,6 +402,9 @@ async function processMessageInner(chatId: string, userMessage: string): Promise
     logger.info(`[trace:${traceId}] done tools=${executedToolNames.join(',') || 'none'} iter=${iterations}`);
     await saveMessage(chatId, 'assistant', finalContent);
     return finalContent;
+    } finally {
+        endTrace(traceId);
+    }
 }
 
 function applyImageUrlFix(

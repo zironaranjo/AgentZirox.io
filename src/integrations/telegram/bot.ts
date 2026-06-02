@@ -10,6 +10,7 @@ import {
 } from '../../core/memory';
 import { isLinkedInOAuthConfigured, publishLinkedInFeedPost } from '../linkedin/linkedin-api';
 import { listTools } from '../../core/dispatcher';
+import { getMetricsSummary, resetMetrics } from '../../core/tracer';
 import { logger } from '../../core/logger';
 import {
     consumePendingTelegramImageCaption,
@@ -60,6 +61,7 @@ export async function startTelegramBot() {
             `/status — Estado del agente\n` +
             `/tools — Ver herramientas disponibles\n` +
             `/provider [groq|openrouter] — Cambiar LLM\n` +
+            `/metrics — Ver métricas del agente (tools, retries, latencia)\n` +
             `/li_pending — Posts LinkedIn esperando tu OK\n` +
             `/li_approve ID — Publicar en LinkedIn la propuesta ID\n` +
             `/li_reject ID — Cancelar propuesta ID`,
@@ -114,6 +116,17 @@ export async function startTelegramBot() {
         }
         process.env.LLM_PROVIDER = arg;
         await ctx.reply(`✅ Proveedor LLM cambiado a: **${arg}**`, { parse_mode: 'Markdown' });
+    });
+
+    // ── /metrics ──────────────────────────────────────────────────────────────
+    bot.command('metrics', async (ctx) => {
+        const arg = ctx.match?.toString().trim().toLowerCase();
+        if (arg === 'reset') {
+            resetMetrics();
+            await ctx.reply('📊 Métricas reseteadas.');
+            return;
+        }
+        await ctx.reply(getMetricsSummary(), { parse_mode: 'Markdown' });
     });
 
     // ── LinkedIn (aprobación humana antes de publicar) ────────────────────────

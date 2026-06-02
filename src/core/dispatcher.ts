@@ -1,4 +1,6 @@
 import { logger } from './logger';
+import { getToolContext } from './tool-context';
+import { recordTool } from './tracer';
 
 export type ToolHandler = (args: Record<string, unknown>) => Promise<string>;
 
@@ -81,8 +83,10 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
     const timeoutMs = tool.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const maxRetries = tool.retries ?? 0;
 
+    const traceId = getToolContext()?.traceId ?? '';
     let lastErr: unknown;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const started = Date.now();
         try {
             if (attempt === 0) {
                 logger.info(`⚙️  Executing tool: ${name}`, args);
@@ -90,6 +94,7 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
                 logger.warn(`⚙️  Retrying tool: ${name} (attempt ${attempt + 1}/${maxRetries + 1})`);
             }
             const result = await runWithTimeout(tool.handler(args), timeoutMs, name);
+            recordTool(traceId, name, Date.now() - started, true);
             return result;
         } catch (err) {
             lastErr = err;
@@ -99,6 +104,7 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
                 await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
                 continue;
             }
+            recordTool(traceId, name, Date.now() - started, false, msg);
             logger.error(`Tool ${name} failed: ${msg}`);
             return `❌ Error en "${name}": ${msg}`;
         }
