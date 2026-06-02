@@ -4,7 +4,7 @@ import { getToolDefinitions, executeTool } from './dispatcher';
 import { logger } from './logger';
 import { runWithToolContext } from './tool-context';
 import { routeIntent } from './intent-router';
-import { classifyDomain, getDomainToolSet } from './domain-router';
+import { classifyDomain, getDomainToolSet, type Domain } from './domain-router';
 import { detectTaskHallucination, requiresTaskAction, taskActionRetryHint } from './task-intent';
 import { isDailyInfographicTask } from './search-locale';
 import { startTrace, endTrace, incLlmCalls, incHallucinationRetries, setDomain, setIntent } from './tracer';
@@ -223,20 +223,22 @@ async function processMessageInner(chatId: string, userMessage: string, traceId:
     const isScheduledTaskFire = userMessage.startsWith('⏰ **Tarea programada**');
     const isScheduledInfographic = isScheduledTaskFire && isDailyInfographicTask(userMessage);
     let tools: typeof allTools;
+    let activeDomain: Domain = 'general';
     if (isImageReceival) {
         tools = allTools.filter(t => !IMAGE_RECEIVAL_EXCLUDED_TOOLS.has(t.name));
     } else if (isScheduledInfographic) {
         // Flujo multi-paso: búsqueda + infografía + LinkedIn — no filtrar por dominio notes
         tools = allTools;
+        activeDomain = 'linkedin';
     } else {
-        const domain = classifyDomain(userMessage);
-        setDomain(traceId, domain);
-        const domainToolSet = getDomainToolSet(domain);
+        activeDomain = classifyDomain(userMessage);
+        setDomain(traceId, activeDomain);
+        const domainToolSet = getDomainToolSet(activeDomain);
         tools = domainToolSet
             ? allTools.filter(t => domainToolSet.has(t.name))
             : allTools;
-        if (domain !== 'general') {
-            logger.info(`[trace:${traceId}] domain=${domain} tools=${tools.map(t => t.name).join(',')}`);
+        if (activeDomain !== 'general') {
+            logger.info(`[trace:${traceId}] domain=${activeDomain} tools=${tools.map(t => t.name).join(',')}`);
         }
     }
     // Scheduled task execution: strip scheduling tools to prevent re-schedule loops.
@@ -303,7 +305,7 @@ async function processMessageInner(chatId: string, userMessage: string, traceId:
         });
     }
 
-    let response = await callLLM(conversation, tools);
+    let response = await callLLM(conversation, tools, activeDomain);
     incLlmCalls(traceId);
 
     let iterations = 0;
@@ -348,7 +350,7 @@ async function processMessageInner(chatId: string, userMessage: string, traceId:
             if (executedToolNames.includes('generate_image')) {
                 tools = tools.filter(t => t.name !== 'generate_image');
             }
-            response = await callLLM(conversation, tools);
+            response = await callLLM(conversation, tools, activeDomain);
             incLlmCalls(traceId);
 
         } else {
@@ -374,7 +376,7 @@ async function processMessageInner(chatId: string, userMessage: string, traceId:
                         role: 'user',
                         content: `SISTEMA: PROHIBIDO describir herramientas en texto. Describiste que usaste una herramienta pero NO la llamaste mediante tool_calls.${hint}${taskHint} DEBES llamarla AHORA usando el mecanismo estructurado de tool_calls. NO escribas más texto explicativo — llama la herramienta directamente. PROHIBIDO inventar IDs de tareas.`,
                     });
-                    response = await callLLM(conversation, tools);
+                    response = await callLLM(conversation, tools, activeDomain);
                     incLlmCalls(traceId);
                     continue agentLoop;
                 }
