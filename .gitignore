@@ -9,3 +9,16 @@ hermes-agent/
 *.db-wal
 .DS_Store
 *.log
+.tmp-*
+.agents/
+.claude/
+.playwright-cli/
+.playwright/
+.tmp-tsup-check/
+jarvis/
+output/
+skills-lock.json
+*.png
+*.mp4
+ziro-web*.png
+triadak-*.png
