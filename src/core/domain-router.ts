@@ -81,6 +81,7 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
     ],
     research: [
         'web_search', 'fetch_url', 'browser_screenshot', 'browser_open', 'browser_fill', 'browser_click', 'browser_submit', 'browser_screenshot_session', 'browser_close', 'get_price', 'youtube_transcript',
+        'apify_google_search', 'apify_scrape_url', 'apify_run_actor',
     ],
     knowledge: [
         'add_knowledge', 'search_knowledge', 'list_knowledge', 'delete_knowledge',
@@ -92,6 +93,7 @@ export const DOMAIN_TOOLS: Record<Domain, readonly string[]> = {
         'run_marketing_audit',
         'web_search', 'fetch_url', 'browser_screenshot',
         'generate_image',
+        'apify_google_search', 'apify_scrape_url', 'apify_run_actor',
     ],
     general: [],
 };

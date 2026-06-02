@@ -44,6 +44,8 @@ const RULES = {
         `TIKTOK / VÍDEO CORTO CON VOZ — Si piden vídeo TikTok/Reel/Short CON VOZ y/o subtítulos: OBLIGATORIO create_short_video (segments[] + caption + motion veo|kenburns). Default motion=veo con veo_clips=2 si no dicen otra cosa. PROHIBIDO generate_video para guiones con voz (solo genera 1 clip suelto de 8s sin TTS). Solo texto animado SIN voz → create_tiktok_text_video. Publicación: create_short_video encola solo; el usuario aprueba con /tt_approve ID o "dale"/"aprobado" justo después del mensaje con el id. CLONAR ESTILO DE UN TIKTOK QUE LE GUSTA: (1) analyze_reference con la URL, (2) save_style_recipe con hook/estructura/tono/CTA, (3) create_from_style con receta+tema nuevo, (4) create_short_video con el guion generado (veo, 2 clips). Imitar FORMATO, no copiar contenido literal. Si pegan URL + "haz uno parecido sobre X", ejecuta los 4 pasos sin preguntar.`,
     infographics:
         `INFOGRAFIAS — RÁPIDA (AntV, ~30s): create_infographic (title + steps[] + benefits[] strings, máx. 3 por lado). PREMIUM (NotebookLM, 2–8 min, calidad editorial): create_infographic_notebooklm cuando pidan calidad NotebookLM o diseño premium. En create_infographic_notebooklm NO inventes sources[] ni URLs salvo que el usuario las pegue explícitamente. Si create_infographic_notebooklm falla por RateLimitError/cuota, NO uses create_infographic como sustituto: informa que la cuota diaria de NotebookLM está agotada. IMPORTANTE — PLAN vs CREAR: Si el usuario pide un "plan", "estrategia", "calendario", "ideas", "propuesta" o "qué temas" para infografías (sin pedir crear una ahora), responde con texto estructurado SIN llamar ninguna tool de infografía. Solo usa create_infographic o create_infographic_notebooklm cuando pidan CREAR una infografía específica con contenido concreto en ese momento. AUDIO NOTEBOOKLM — create_notebooklm_audio cuando pidan resumen en audio, podcast NotebookLM, audio overview o episodio sobre un tema (5–15 min, dos voces). NO usar tts_generate para eso (tts_generate es voz sintética rápida de un texto corto). En create_notebooklm_audio NO inventes sources[] ni URLs. Si falla por cuota, informa y no sustituyas por tts_generate. GESTIONAR: list_infographics, save_infographic. Tras list_infographics: copia el texto TAL CUAL (URLs intactas). PROHIBIDO inventar URLs o XML invoke. Herramientas: create_infographic, create_infographic_notebooklm, create_notebooklm_audio, list_infographics, save_infographic.`,
+    apify:
+        `APIFY SCRAPING — Usa estas tools cuando fetch_url o web_search no son suficientes: (1) apify_scrape_url(url) para webs con JavaScript, SPAs, e-commerce o páginas que requieren navegador real — devuelve el contenido completo renderizado. (2) apify_google_search(query) para resultados de Google estructurados con más detalle que web_search. (3) apify_run_actor(actor_id, input) para scrapers especializados: LinkedIn → "curious_coder/linkedin-scraper", Instagram → "apify/instagram-scraper", Amazon → "apify/amazon-product-scraper". El input debe ser un JSON string según la documentación del actor. Usa apify_scrape_url como alternativa a fetch_url cuando el usuario mencione que la página no carga bien.`,
 } as const;
 
 type RuleKey = keyof typeof RULES;
@@ -57,11 +59,11 @@ const DOMAIN_RULE_KEYS: Record<Domain, readonly RuleKey[]> = {
     productivity: ['web_search', 'capture_note', 'remember', 'schedule', 'sheets', 'tasks', 'browser', 'knowledge', 'infographics'],
     notes:        ['capture_note', 'remember', 'browser', 'knowledge', 'infographics'],
     drive:        ['web_search', 'browser'],
-    research:     ['web_search', 'browser', 'price', 'youtube_transcript', 'knowledge'],
+    research:     ['web_search', 'browser', 'price', 'youtube_transcript', 'knowledge', 'apify'],
     knowledge:    ['web_search', 'browser', 'capture_note', 'remember', 'knowledge'],
     memory:       ['capture_note', 'remember'],
-    marketing:    ['web_search', 'browser', 'image_gen', 'knowledge'],
-    general:      ['web_search', 'image_gen', 'capture_note', 'remember', 'schedule', 'sheets', 'linkedin', 'tasks', 'browser', 'price', 'youtube_transcript', 'desktop', 'tts', 'whatsapp', 'knowledge', 'yt_scripts', 'tiktok', 'infographics'],
+    marketing:    ['web_search', 'browser', 'image_gen', 'knowledge', 'apify'],
+    general:      ['web_search', 'image_gen', 'capture_note', 'remember', 'schedule', 'sheets', 'linkedin', 'tasks', 'browser', 'price', 'youtube_transcript', 'desktop', 'tts', 'whatsapp', 'knowledge', 'yt_scripts', 'tiktok', 'infographics', 'apify'],
 };
 
 function getDomainRuleBlock(domain: Domain): string {

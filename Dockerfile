@@ -103,6 +103,7 @@ RUN npx tsup \
     src/tools/create-linkedin-video.ts \
     src/tools/create-tiktok-text-video.ts \
     src/tools/run-marketing-audit.ts \
+    src/tools/apify.ts \
     --format esm --out-dir dist-server --no-dts
 
 ENV NODE_ENV=production
