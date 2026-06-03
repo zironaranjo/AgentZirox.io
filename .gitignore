@@ -19,6 +19,7 @@ jarvis/
 output/
 skills-lock.json
 scripts/notebooklm-auth-oneline.txt
+scripts/remove_bg*.py
 *.png
 !public/avatar.png
 !public/zirox.png
