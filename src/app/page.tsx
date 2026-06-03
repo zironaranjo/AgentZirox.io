@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import NeuralBackground from "@/components/ui/flow-field-background";
+import { ZiroChatInput } from "@/components/ui/v0-ai-chat";
 
 type AgentState = "idle" | "listening" | "thinking" | "speaking";
 
@@ -59,6 +60,7 @@ export default function Home() {
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || state === "thinking") return;
+    setShowChat(true);
     setTranscript("");
     setMessages(prev => [...prev, { text: trimmed, sender: "user" }]);
     setAgentInput("");
@@ -438,8 +440,9 @@ export default function Home() {
       <div style={{
         color: "rgba(255,255,255,0.18)", fontSize: 10,
         letterSpacing: "0.22em", textTransform: "uppercase",
-        marginBottom: 8,
+        marginBottom: showChat ? 8 : 200,
         userSelect: "none",
+        transition: "margin-bottom 0.35s ease",
       }}>
         {state === "listening" ? "Suelta para enviar" : "Toca para hablar"}
       </div>
@@ -455,6 +458,46 @@ export default function Home() {
           backdropFilter: "blur(8px)",
         }}>
           ⚠ {micError}
+        </div>
+      )}
+
+      {/* ── Barra de chat v0 (21st) — siempre visible en la pantalla principal ── */}
+      {!showChat && (
+        <div
+          className="ziro-chat-dock"
+          style={{
+            position: "fixed",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 35,
+            padding: "12px 16px max(16px, env(safe-area-inset-bottom))",
+            maxWidth: 640,
+            margin: "0 auto",
+            width: "100%",
+            pointerEvents: "auto",
+            background: "linear-gradient(to top, rgba(5,5,8,0.97) 55%, transparent)",
+          }}
+        >
+          <p
+            style={{
+              textAlign: "center",
+              color: "rgba(255,255,255,0.55)",
+              fontSize: 15,
+              fontWeight: 600,
+              marginBottom: 10,
+            }}
+          >
+            ¿En qué puedo asistirte?
+          </p>
+          <ZiroChatInput
+            value={agentInput}
+            onChange={setAgentInput}
+            onSend={sendMessage}
+            disabled={state === "thinking"}
+            placeholder="Escribe un mensaje a Ziro…"
+            showSuggestions
+          />
         </div>
       )}
 
@@ -530,51 +573,15 @@ export default function Home() {
           )}
         </div>
 
-        {/* v0-style input */}
-        <div style={{ padding: "10px 14px 14px", flexShrink: 0 }}>
-          <div style={{
-            background: "rgba(255,255,255,0.04)",
-            borderRadius: 16,
-            border: `1px solid rgba(255,255,255,0.10)`,
-            overflow: "hidden",
-          }}>
-            <textarea
-              placeholder="Escribe un mensaje..."
-              value={agentInput}
-              onChange={e => setAgentInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(agentInput); } }}
-              disabled={state === "thinking"}
-              rows={1}
-              style={{
-                width: "100%", background: "transparent", border: "none",
-                outline: "none", resize: "none", padding: "12px 14px 4px",
-                color: "#f1f5f9", fontSize: 14, fontFamily: "inherit",
-                lineHeight: 1.5,
-              }}
-            />
-            <div style={{
-              display: "flex", justifyContent: "flex-end",
-              padding: "6px 10px 10px",
-            }}>
-              <button
-                onClick={() => sendMessage(agentInput)}
-                disabled={state === "thinking" || !agentInput.trim()}
-                style={{
-                  width: 32, height: 32, borderRadius: "50%",
-                  background: agentInput.trim() && state !== "thinking"
-                    ? "#fff" : "rgba(255,255,255,0.12)",
-                  border: "none", cursor: agentInput.trim() ? "pointer" : "default",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  transition: "background 0.2s ease",
-                }}
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke={agentInput.trim() ? "#000" : "rgba(255,255,255,0.4)"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="19" x2="12" y2="5" />
-                  <polyline points="5 12 12 5 19 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
+        <div style={{ padding: "10px 14px 16px", flexShrink: 0 }}>
+          <ZiroChatInput
+            value={agentInput}
+            onChange={setAgentInput}
+            onSend={sendMessage}
+            disabled={state === "thinking"}
+            placeholder="Escribe un mensaje a Ziro…"
+            showSuggestions={messages.length <= 2}
+          />
         </div>
       </div>
 

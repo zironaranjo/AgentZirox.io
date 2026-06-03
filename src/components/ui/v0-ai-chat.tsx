@@ -1,213 +1,259 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useCallback, useState, type ReactNode } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
-    ImageIcon,
-    FileUp,
-    Sigma,
-    MonitorIcon,
-    CircleUserRound,
-    ArrowUpIcon,
-    Paperclip,
-    PlusIcon,
+  ArrowUpIcon,
+  Clapperboard,
+  ListTodo,
+  Newspaper,
+  Search,
+  Share2,
 } from "lucide-react";
 
 interface UseAutoResizeTextareaProps {
-    minHeight: number;
-    maxHeight?: number;
+  minHeight: number;
+  maxHeight?: number;
 }
 
 function useAutoResizeTextarea({
-    minHeight,
-    maxHeight,
+  minHeight,
+  maxHeight,
 }: UseAutoResizeTextareaProps) {
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    const adjustHeight = useCallback(
-        (reset?: boolean) => {
-            const textarea = textareaRef.current;
-            if (!textarea) return;
+  const adjustHeight = useCallback(
+    (reset?: boolean) => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
 
-            if (reset) {
-                textarea.style.height = `${minHeight}px`;
-                return;
-            }
+      if (reset) {
+        textarea.style.height = `${minHeight}px`;
+        return;
+      }
 
-            // Temporarily shrink to get the right scrollHeight
-            textarea.style.height = `${minHeight}px`;
+      textarea.style.height = `${minHeight}px`;
+      const newHeight = Math.max(
+        minHeight,
+        Math.min(
+          textarea.scrollHeight,
+          maxHeight ?? Number.POSITIVE_INFINITY
+        )
+      );
+      textarea.style.height = `${newHeight}px`;
+    },
+    [minHeight, maxHeight]
+  );
 
-            // Calculate new height
-            const newHeight = Math.max(
-                minHeight,
-                Math.min(
-                    textarea.scrollHeight,
-                    maxHeight ?? Number.POSITIVE_INFINITY
-                )
-            );
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) textarea.style.height = `${minHeight}px`;
+  }, [minHeight]);
 
-            textarea.style.height = `${newHeight}px`;
-        },
-        [minHeight, maxHeight]
-    );
+  useEffect(() => {
+    const handleResize = () => adjustHeight();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [adjustHeight]);
 
-    useEffect(() => {
-        // Set initial height
-        const textarea = textareaRef.current;
-        if (textarea) {
-            textarea.style.height = `${minHeight}px`;
-        }
-    }, [minHeight]);
-
-    // Adjust height on window resize
-    useEffect(() => {
-        const handleResize = () => adjustHeight();
-        window.addEventListener("resize", handleResize);
-        return () => window.removeEventListener("resize", handleResize);
-    }, [adjustHeight]);
-
-    return { textareaRef, adjustHeight };
+  return { textareaRef, adjustHeight };
 }
 
-export function VercelV0Chat() {
-    const [value, setValue] = useState("");
-    const { textareaRef, adjustHeight } = useAutoResizeTextarea({
-        minHeight: 60,
-        maxHeight: 200,
-    });
+export type ZiroChatSuggestion = {
+  icon: ReactNode;
+  label: string;
+  prompt: string;
+};
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            if (value.trim()) {
-                setValue("");
-                adjustHeight(true);
-            }
-        }
-    };
+const DEFAULT_SUGGESTIONS: ZiroChatSuggestion[] = [
+  {
+    icon: <Newspaper className="w-4 h-4" />,
+    label: "Infografía IA",
+    prompt:
+      "Crea la infografía diaria de noticias IA con NotebookLM y proponla en LinkedIn",
+  },
+  {
+    icon: <ListTodo className="w-4 h-4" />,
+    label: "Pendientes",
+    prompt: "lista pendientes",
+  },
+  {
+    icon: <Search className="w-4 h-4" />,
+    label: "Buscar noticias",
+    prompt: "Busca las últimas noticias de inteligencia artificial de hoy",
+  },
+  {
+    icon: <Share2 className="w-4 h-4" />,
+    label: "LinkedIn",
+    prompt: "Propón un post profesional en LinkedIn sobre IA",
+  },
+  {
+    icon: <Clapperboard className="w-4 h-4" />,
+    label: "Vídeo corto",
+    prompt: "Crea un vídeo corto para TikTok sobre un tema de IA",
+  },
+];
 
-    return (
-        <div className="flex flex-col items-center w-full max-w-4xl mx-auto p-4 space-y-8">
-            <h1 className="text-4xl font-bold text-black dark:text-white">
-                What can I help you ship?
-            </h1>
+export type ZiroChatInputProps = {
+  value: string;
+  onChange: (value: string) => void;
+  onSend: (text: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  suggestions?: ZiroChatSuggestion[];
+  showSuggestions?: boolean;
+  className?: string;
+};
 
-            <div className="w-full">
-                <div className="relative bg-neutral-900 rounded-xl border border-neutral-800">
-                    <div className="overflow-y-auto">
-                        <Textarea
-                            ref={textareaRef}
-                            value={value}
-                            onChange={(e) => {
-                                setValue(e.target.value);
-                                adjustHeight();
-                            }}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Ask v0 a question..."
-                            className={cn(
-                                "w-full px-4 py-3",
-                                "resize-none",
-                                "bg-transparent",
-                                "border-none",
-                                "text-white text-sm",
-                                "focus:outline-none",
-                                "focus-visible:ring-0 focus-visible:ring-offset-0",
-                                "placeholder:text-neutral-500 placeholder:text-sm",
-                                "min-h-[60px]"
-                            )}
-                            style={{
-                                overflow: "hidden",
-                            }}
-                        />
-                    </div>
+export function ZiroChatInput({
+  value,
+  onChange,
+  onSend,
+  disabled = false,
+  placeholder = "Escribe un mensaje a Ziro…",
+  suggestions = DEFAULT_SUGGESTIONS,
+  showSuggestions = true,
+  className,
+}: ZiroChatInputProps) {
+  const { textareaRef, adjustHeight } = useAutoResizeTextarea({
+    minHeight: 52,
+    maxHeight: 160,
+  });
 
-                    <div className="flex items-center justify-between p-3">
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                className="group p-2 hover:bg-neutral-800 rounded-lg transition-colors flex items-center gap-1"
-                            >
-                                <Paperclip className="w-4 h-4 text-white" />
-                                <span className="text-xs text-zinc-400 hidden group-hover:inline transition-opacity">
-                                    Attach
-                                </span>
-                            </button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                className="px-2 py-1 rounded-lg text-sm text-zinc-400 transition-colors border border-dashed border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800 flex items-center justify-between gap-1"
-                            >
-                                <PlusIcon className="w-4 h-4" />
-                                Project
-                            </button>
-                            <button
-                                type="button"
-                                className={cn(
-                                    "px-1.5 py-1.5 rounded-lg text-sm transition-colors border border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800 flex items-center justify-between gap-1",
-                                    value.trim()
-                                        ? "bg-white text-black"
-                                        : "text-zinc-400"
-                                )}
-                            >
-                                <ArrowUpIcon
-                                    className={cn(
-                                        "w-4 h-4",
-                                        value.trim()
-                                            ? "text-black"
-                                            : "text-zinc-400"
-                                    )}
-                                />
-                                <span className="sr-only">Send</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
+  const submit = useCallback(() => {
+    const trimmed = value.trim();
+    if (!trimmed || disabled) return;
+    onSend(trimmed);
+    adjustHeight(true);
+  }, [value, disabled, onSend, adjustHeight]);
 
-                <div className="flex items-center justify-center gap-3 mt-4">
-                    <ActionButton
-                        icon={<ImageIcon className="w-4 h-4" />}
-                        label="Clone a Screenshot"
-                    />
-                    <ActionButton
-                        icon={<Sigma className="w-4 h-4" />}
-                        label="Import from Figma"
-                    />
-                    <ActionButton
-                        icon={<FileUp className="w-4 h-4" />}
-                        label="Upload a Project"
-                    />
-                    <ActionButton
-                        icon={<MonitorIcon className="w-4 h-4" />}
-                        label="Landing Page"
-                    />
-                    <ActionButton
-                        icon={<CircleUserRound className="w-4 h-4" />}
-                        label="Sign Up Form"
-                    />
-                </div>
-            </div>
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      submit();
+    }
+  };
+
+  return (
+    <div className={cn("w-full", className)}>
+      <div
+        className={cn(
+          "relative rounded-2xl border transition-colors",
+          "bg-[rgba(255,255,255,0.04)] border-[rgba(255,255,255,0.10)]",
+          "focus-within:border-violet-500/50 focus-within:shadow-[0_0_0_1px_rgba(139,92,246,0.25)]"
+        )}
+      >
+        <div className="overflow-y-auto">
+          <Textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => {
+              onChange(e.target.value);
+              adjustHeight();
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={disabled}
+            rows={1}
+            className={cn(
+              "w-full px-4 py-3",
+              "resize-none min-h-[52px]",
+              "bg-transparent border-none",
+              "text-[#f1f5f9] text-sm leading-relaxed",
+              "focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
+              "placeholder:text-zinc-500 placeholder:text-sm",
+              "disabled:opacity-50 disabled:cursor-not-allowed"
+            )}
+            style={{ overflow: "hidden" }}
+          />
         </div>
-    );
-}
 
-interface ActionButtonProps {
-    icon: React.ReactNode;
-    label: string;
-}
-
-function ActionButton({ icon, label }: ActionButtonProps) {
-    return (
-        <button
+        <div className="flex items-center justify-end px-3 pb-3 pt-0">
+          <button
             type="button"
-            className="flex items-center gap-2 px-4 py-2 bg-neutral-900 hover:bg-neutral-800 rounded-full border border-neutral-800 text-neutral-400 hover:text-white transition-colors"
-        >
-            {icon}
-            <span className="text-xs">{label}</span>
-        </button>
-    );
+            onClick={submit}
+            disabled={disabled || !value.trim()}
+            aria-label="Enviar mensaje"
+            className={cn(
+              "p-2 rounded-full transition-all duration-200 border",
+              value.trim() && !disabled
+                ? "bg-white text-black border-white hover:bg-violet-50"
+                : "bg-transparent text-zinc-500 border-zinc-700/80 cursor-default"
+            )}
+          >
+            <ArrowUpIcon
+              className={cn(
+                "w-4 h-4",
+                value.trim() && !disabled ? "text-black" : "text-zinc-500"
+              )}
+            />
+          </button>
+        </div>
+      </div>
+
+      {showSuggestions && suggestions.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-2 mt-3 px-0.5">
+          {suggestions.map((s) => (
+            <SuggestionChip
+              key={s.label}
+              icon={s.icon}
+              label={s.label}
+              disabled={disabled}
+              onClick={() => onSend(s.prompt)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
+/** Demo standalone del diseño 21st (sin cablear al agente). */
+export function VercelV0Chat() {
+  const [value, setValue] = useState("");
+  return (
+    <div className="flex flex-col items-center w-full max-w-4xl mx-auto p-4 space-y-6">
+      <h1 className="text-2xl font-bold text-white text-center">
+        ¿En qué puedo ayudarte?
+      </h1>
+      <ZiroChatInput
+        value={value}
+        onChange={setValue}
+        onSend={(t) => {
+          setValue("");
+          console.log("demo send:", t);
+        }}
+      />
+    </div>
+  );
+}
 
+function SuggestionChip({
+  icon,
+  label,
+  disabled,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs",
+        "bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)]",
+        "text-zinc-400 hover:text-violet-200 hover:border-violet-500/40 hover:bg-violet-500/10",
+        "transition-colors disabled:opacity-40 disabled:pointer-events-none"
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
