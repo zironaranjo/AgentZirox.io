@@ -28,6 +28,7 @@ tags:
 |------|----------|
 | [[context]] | Cómo funciona Ziro (stack, memoria, tools) |
 | [[roadmap]] | Roadmap y fases |
+| [[historial-errores/00-indice\|Historial errores]] | Fallos y resoluciones (aprender de cada bug) |
 | [[AGENTS]] | Reglas para desarrollo con IA |
 
 ## Enlaces rápidos producción
