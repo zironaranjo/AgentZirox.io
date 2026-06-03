@@ -20,6 +20,9 @@ output/
 skills-lock.json
 scripts/notebooklm-auth-oneline.txt
 *.png
+!public/avatar.png
+!public/zirox.png
+!public/zirox-nobg.png
 *.mp4
 ziro-web*.png
 triadak-*.png
