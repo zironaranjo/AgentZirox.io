@@ -11,6 +11,11 @@
   --secondary-glow: rgba(14, 165, 233, 0.4);
   --glass-bg: rgba(255, 255, 255, 0.03);
   --glass-border: rgba(255, 255, 255, 0.08);
+  /* shadcn variables */
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #8b5cf6;
+  --muted: #1c1c1f;
+  --muted-foreground: #a1a1aa;
 }
 
 body {
