@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
+import NeuralBackground from "@/components/ui/flow-field-background";
+import { InputBar } from "@/components/ui/input-bar";
 
 type AgentState = "idle" | "listening" | "thinking" | "speaking";
 
@@ -158,20 +160,15 @@ export default function Home() {
         </defs>
       </svg>
 
-      {/* ── Background: static corner blobs ── */}
+      {/* ── Background: Neural particle flow field ── */}
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }} aria-hidden="true">
-        <div style={{
-          position: "absolute", bottom: "-15%", left: "-8%",
-          width: "55%", height: "65%",
-          background: "radial-gradient(ellipse at center, #4c1d9516 0%, transparent 65%)",
-          filter: "blur(48px)",
-        }} />
-        <div style={{
-          position: "absolute", top: "-10%", right: "-8%",
-          width: "50%", height: "55%",
-          background: "radial-gradient(ellipse at center, #0c4a6e14 0%, transparent 65%)",
-          filter: "blur(48px)",
-        }} />
+        <NeuralBackground
+          color={c.primary}
+          particleCount={350}
+          trailOpacity={0.10}
+          speed={0.8}
+          className="absolute inset-0 w-full h-full opacity-40"
+        />
       </div>
 
       {/* ── Dynamic ambient glow (follows state color) ── */}
@@ -540,57 +537,16 @@ export default function Home() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Text input row */}
-        <div style={{
-          padding: "10px 14px 14px",
-          borderTop: "1px solid rgba(255,255,255,0.05)",
-          display: "flex", gap: 8,
-          flexShrink: 0,
-        }}>
-          <label htmlFor="chat-input" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", opacity: 0 }}>
-            Mensaje para Ziro
-          </label>
-          <input
-            id="chat-input"
-            type="text"
-            placeholder="Escribe un mensaje..."
+        {/* Text input row — InputBar 21st.dev */}
+        <div style={{ paddingTop: 8, flexShrink: 0 }}>
+          <InputBar
             value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && sendMessage(input)}
+            onChange={setInput}
+            onSend={(msg: { role: "user"; content: string }) => sendMessage(msg.content)}
+            status={state === "thinking" ? "streaming" : "ready"}
+            placeholder="Escribe un mensaje..."
             disabled={state === "thinking"}
-            autoComplete="off"
-            style={{
-              flex: 1,
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 14, padding: "10px 16px",
-              color: "#f8fafc", fontSize: 14, outline: "none",
-              fontFamily: "inherit",
-              transition: "border-color 0.2s ease, box-shadow 0.2s ease",
-              minHeight: 44,
-            }}
           />
-          <button
-            onClick={() => sendMessage(input)}
-            disabled={state === "thinking" || !input.trim()}
-            aria-label="Enviar mensaje"
-            style={{
-              width: 44, height: 44, borderRadius: 14, flexShrink: 0,
-              background: state === "thinking" || !input.trim()
-                ? "rgba(139,92,246,0.18)"
-                : `linear-gradient(135deg, ${c.primary}, ${c.secondary})`,
-              border: "none", cursor: state === "thinking" || !input.trim() ? "not-allowed" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "background 0.25s ease, box-shadow 0.25s ease",
-              boxShadow: !input.trim() ? "none" : `0 0 18px ${c.primary}44`,
-              opacity: state === "thinking" ? 0.45 : 1,
-            }}
-          >
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"
-              style={{ fill: "white", marginLeft: 2 }}>
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-            </svg>
-          </button>
         </div>
       </div>
 
