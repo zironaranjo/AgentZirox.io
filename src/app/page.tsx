@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import NeuralBackground from "@/components/ui/flow-field-background";
-import { AgentChat, type AgentMessage } from "@/components/ui/agent-chat";
 
 type AgentState = "idle" | "listening" | "thinking" | "speaking";
 
@@ -26,6 +25,7 @@ export default function Home() {
     { text: "Enlace establecido. Soy Ziro.<br/>¿En qué puedo asistirte?", sender: "bot" },
   ]);
   const [state, setState]           = useState<AgentState>("idle");
+  const [agentInput, setAgentInput] = useState("");
   const [showChat, setShowChat]     = useState(false);
   const [transcript, setTranscript] = useState("");
   const [lastReply, setLastReply]   = useState("");
@@ -33,15 +33,6 @@ export default function Home() {
   const recogRef                    = useRef<any>(null);
   const speakTimerRef               = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Convert messages to AgentMessage format for AgentChat
-  const agentMessages = useMemo<AgentMessage[]>(() =>
-    messages.map((m, i) => ({
-      id: String(i),
-      role: m.sender === "user" ? "user" as const : "assistant" as const,
-      parts: [{ type: "text" as const, text: m.text.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim() }],
-    })),
-    [messages]
-  );
 
   const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&[a-z]+;/g, " ").trim();
 
@@ -70,6 +61,7 @@ export default function Home() {
     if (!trimmed || state === "thinking") return;
     setTranscript("");
     setMessages(prev => [...prev, { text: trimmed, sender: "user" }]);
+    setAgentInput("");
     setState("thinking");
 
     try {
@@ -170,7 +162,7 @@ export default function Home() {
           particleCount={350}
           trailOpacity={0.10}
           speed={0.8}
-          className="absolute inset-0 w-full h-full opacity-40"
+          className="absolute inset-0 w-full h-full opacity-35 bg-transparent"
         />
       </div>
 
@@ -497,13 +489,93 @@ export default function Home() {
           flexShrink: 0,
         }} />
 
-        {/* AgentChat — messages + input from 21st.dev */}
-        <AgentChat
-          messages={agentMessages}
-          onSend={(msg) => sendMessage(msg.content)}
-          status={state === "thinking" ? "streaming" : "ready"}
-          className="flex-1 min-h-0"
-        />
+        {/* Messages */}
+        <div style={{
+          flex: 1, overflowY: "auto",
+          padding: "12px 16px",
+          display: "flex", flexDirection: "column", gap: 8,
+        }}>
+          {messages.map((msg, i) => (
+            <div key={i} style={{
+              maxWidth: "80%",
+              padding: "10px 14px",
+              borderRadius: msg.sender === "bot" ? "16px 16px 16px 4px" : "16px 16px 4px 16px",
+              alignSelf: msg.sender === "bot" ? "flex-start" : "flex-end",
+              background: msg.sender === "bot"
+                ? "rgba(255,255,255,0.05)"
+                : `linear-gradient(135deg, ${c.primary}, ${c.secondary})`,
+              border: msg.sender === "bot" ? `1px solid rgba(255,255,255,0.08)` : "none",
+              color: "#f1f5f9",
+              fontSize: 13.5, lineHeight: 1.6,
+            }}
+              dangerouslySetInnerHTML={{ __html: msg.text }}
+            />
+          ))}
+          {state === "thinking" && (
+            <div style={{
+              alignSelf: "flex-start",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: "16px 16px 16px 4px",
+              padding: "12px 16px",
+              display: "flex", gap: 5, alignItems: "center",
+            }}>
+              {[0, 0.2, 0.4].map((d, i) => (
+                <div key={i} style={{
+                  width: 6, height: 6, background: c.primary, borderRadius: "50%",
+                  animation: `bounce 1.2s ease-in-out ${d}s infinite`,
+                }} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* v0-style input */}
+        <div style={{ padding: "10px 14px 14px", flexShrink: 0 }}>
+          <div style={{
+            background: "rgba(255,255,255,0.04)",
+            borderRadius: 16,
+            border: `1px solid rgba(255,255,255,0.10)`,
+            overflow: "hidden",
+          }}>
+            <textarea
+              placeholder="Escribe un mensaje..."
+              value={agentInput}
+              onChange={e => setAgentInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(agentInput); } }}
+              disabled={state === "thinking"}
+              rows={1}
+              style={{
+                width: "100%", background: "transparent", border: "none",
+                outline: "none", resize: "none", padding: "12px 14px 4px",
+                color: "#f1f5f9", fontSize: 14, fontFamily: "inherit",
+                lineHeight: 1.5,
+              }}
+            />
+            <div style={{
+              display: "flex", justifyContent: "flex-end",
+              padding: "6px 10px 10px",
+            }}>
+              <button
+                onClick={() => sendMessage(agentInput)}
+                disabled={state === "thinking" || !agentInput.trim()}
+                style={{
+                  width: 32, height: 32, borderRadius: "50%",
+                  background: agentInput.trim() && state !== "thinking"
+                    ? "#fff" : "rgba(255,255,255,0.12)",
+                  border: "none", cursor: agentInput.trim() ? "pointer" : "default",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "background 0.2s ease",
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke={agentInput.trim() ? "#000" : "rgba(255,255,255,0.4)"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="19" x2="12" y2="5" />
+                  <polyline points="5 12 12 5 19 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <style>{`
