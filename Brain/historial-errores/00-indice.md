@@ -31,6 +31,37 @@ tags:
 | 2026-06-03 | Landing | Estrellitas hero invisibles en Samsung | Resuelto | [[2026-06-03-landing-galaxy-estrellas-movil]] |
 | 2026-06-03 | Landing | Build Docker: Galaxy.tsx ref null TS | Resuelto | [[2026-06-03-landing-build-galaxy-typescript]] |
 
+## Reglas en criollo (móvil Samsung)
+
+### Qué pasaba
+
+La landing usa **dos efectos con WebGL** (gráficos 3D en el navegador):
+
+1. **Estrellitas** del inicio (`Galaxy`)
+2. **Ola de puntos** (`Three.js`)
+
+En **PC** el navegador aguanta varios a la vez. En muchos **Samsung** (GPU Mali), el **segundo suele romperse** → blanco, sin puntos, icono roto.
+
+Por eso en el emulador del PC se veía bien y en el **A54 no**.
+
+### La regla
+
+> **En móvil, como mucho un WebGL “grande” por pantalla.**  
+> Si hace falta otro efecto parecido → **canvas 2D** (más compatible).
+
+| Parte | Móvil (<1024px) | PC (≥1024px) |
+|-------|-----------------|--------------|
+| Estrellitas | Canvas 2D | WebGL (Galaxy) |
+| Ola | Canvas 2D | WebGL (Three.js) |
+
+Misma idea visual; **motor distinto** en móvil para que no falle.
+
+### DevTools no basta
+
+Probar en Chrome del PC con “modo móvil” **no sustituye** un **móvil real** (A54, etc.). Siempre revisar en el teléfono antes de dar por cerrado.
+
+---
+
 ## Patrones recurrentes
 
 > [!warning] WebGL en Samsung / Mali
