@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import NeuralBackground from "@/components/ui/flow-field-background";
 import { ZiroChatInput } from "@/components/ui/v0-ai-chat";
+import { stripForSpeech } from "@/lib/speech-text";
 
 type AgentState = "idle" | "listening" | "thinking" | "speaking";
 
@@ -38,25 +39,75 @@ export default function Home() {
   const speakTimerRef               = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
-  const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&[a-z]+;/g, " ").trim();
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const speakText = useCallback((text: string) => {
-    if (!("speechSynthesis" in window)) return;
+  const speakBrowserFallback = useCallback((text: string) => {
+    if (!("speechSynthesis" in window)) {
+      setState("idle");
+      return;
+    }
     window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(stripHtml(text));
-    utter.lang = "es-ES";
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "es-MX";
     utter.rate = 1.05;
-    utter.pitch = 1;
     const voices = window.speechSynthesis.getVoices();
-    const esVoice = voices.find(v => v.lang.startsWith("es")) ?? null;
-    if (esVoice) utter.voice = esVoice;
+    const preferred =
+      voices.find(v => /jorge/i.test(v.name)) ??
+      voices.find(v => v.lang.startsWith("es-MX") && /male|hombre/i.test(v.name)) ??
+      voices.find(v => v.lang.startsWith("es-MX")) ??
+      voices.find(v => v.lang.startsWith("es")) ??
+      null;
+    if (preferred) utter.voice = preferred;
     utter.onend = () => setState("idle");
     utter.onerror = () => setState("idle");
     window.speechSynthesis.speak(utter);
   }, []);
 
+  const speakText = useCallback(async (text: string) => {
+    const clean = stripForSpeech(text);
+    if (!clean) {
+      setState("idle");
+      return;
+    }
+
+    audioRef.current?.pause();
+    if (audioRef.current?.src.startsWith("blob:")) {
+      URL.revokeObjectURL(audioRef.current.src);
+    }
+
+    try {
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: clean, voice: "jorge" }),
+      });
+      if (!res.ok) throw new Error("tts");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        setState("idle");
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        setState("idle");
+      };
+      await audio.play();
+    } catch {
+      speakBrowserFallback(clean);
+    }
+  }, [speakBrowserFallback]);
+
   useEffect(() => {
     if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
+    return () => {
+      audioRef.current?.pause();
+      if (audioRef.current?.src.startsWith("blob:")) {
+        URL.revokeObjectURL(audioRef.current.src);
+      }
+    };
   }, []);
 
 
@@ -81,7 +132,7 @@ export default function Home() {
       setLastReply(reply);
       setShowChat(true);
       setState("speaking");
-      speakText(reply);
+      await speakText(reply);
     } catch {
       setMessages(prev => [...prev, { text: "[Error de conexión]", sender: "bot" }]);
       setState("idle");
@@ -617,13 +668,6 @@ export default function Home() {
           }
         }
 
-        .ziro-main-stage {
-          transition: margin-right 0.38s cubic-bezier(0.32, 0.72, 0, 1);
-        }
-        .ziro-chat-open .ziro-main-stage {
-          margin-right: var(--ziro-sidebar-w, 340px);
-        }
-
         .ziro-chat-dock {
           position: fixed;
           left: 0;
@@ -636,15 +680,7 @@ export default function Home() {
           width: 100%;
           pointer-events: auto;
           background: linear-gradient(to top, rgba(5,5,8,0.97) 55%, transparent);
-          transition: right 0.38s cubic-bezier(0.32, 0.72, 0, 1),
-                      max-width 0.38s cubic-bezier(0.32, 0.72, 0, 1);
           box-sizing: border-box;
-        }
-        .ziro-chat-open .ziro-chat-dock {
-          right: var(--ziro-sidebar-w, 340px);
-          left: 0;
-          margin: 0;
-          max-width: min(640px, calc(100vw - var(--ziro-sidebar-w, 340px) - 24px));
         }
         .ziro-chat-dock-title {
           text-align: center;
@@ -654,13 +690,22 @@ export default function Home() {
           margin-bottom: 10px;
         }
 
+        .ziro-chat-open::before {
+          content: "";
+          position: fixed;
+          inset: 0;
+          z-index: 39;
+          background: rgba(0, 0, 0, 0.35);
+          pointer-events: none;
+        }
+
         .ziro-chat-sidebar {
           position: fixed;
           top: 0;
           right: 0;
           bottom: 0;
           width: var(--ziro-sidebar-w, 340px);
-          z-index: 40;
+          z-index: 45;
           display: flex;
           flex-direction: column;
           background: rgba(6, 6, 10, 0.96);
@@ -689,11 +734,6 @@ export default function Home() {
         @media (max-width: 720px) {
           .ziro-layout.ziro-chat-open {
             --ziro-sidebar-w: min(88vw, 300px);
-          }
-          .ziro-chat-open .ziro-chat-dock {
-            max-width: calc(100vw - var(--ziro-sidebar-w) - 16px);
-            padding-left: 10px;
-            padding-right: 10px;
           }
         }
       `}</style>

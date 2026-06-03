@@ -2,6 +2,7 @@ import { registerTool } from '../core/dispatcher';
 import { getToolContext } from '../core/tool-context';
 import { cacheAudioFile, clearCachedAudio } from '../core/audio-cache';
 import { uploadAudioToStorage } from '../core/storage';
+import { stripForSpeech } from '../lib/speech-text';
 import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -41,7 +42,7 @@ export const VOICES: Record<string, string> = {
  * Reutilizable por otras tools (ej. create_short_video). Usa Edge TTS gratuito.
  */
 export async function synthesizeSpeech(text: string, voiceKey = 'default'): Promise<Buffer> {
-    const clean = text.trim();
+    const clean = stripForSpeech(text);
     if (!clean) throw new Error('synthesizeSpeech: texto vacío');
     const voice = VOICES[voiceKey.toLowerCase()] ?? VOICES.default;
 
