@@ -21,6 +21,9 @@ const LABELS: Record<AgentState, string> = {
   speaking:  "Respondiendo...",
 };
 
+/** Ancho del panel lateral de conversación (px) */
+const SIDEBAR_W = 340;
+
 export default function Home() {
   const [messages, setMessages] = useState<{ text: string; sender: "user" | "bot" }[]>([
     { text: "Enlace establecido. Soy Ziro.<br/>¿En qué puedo asistirte?", sender: "bot" },
@@ -136,14 +139,18 @@ export default function Home() {
   const isActive = state !== "idle";
 
   return (
-    <div style={{
-      minHeight: "100svh", width: "100%",
-      background: "#050508",
-      display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center",
-      fontFamily: "'Outfit', 'Inter', system-ui, sans-serif",
-      position: "relative", overflow: "hidden",
-    }}>
+    <div
+      className={showChat ? "ziro-layout ziro-chat-open" : "ziro-layout"}
+      style={{
+        minHeight: "100svh", width: "100%",
+        background: "#050508",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        fontFamily: "'Outfit', 'Inter', system-ui, sans-serif",
+        position: "relative", overflow: "hidden",
+        ["--ziro-sidebar-w" as string]: `${SIDEBAR_W}px`,
+      }}
+    >
 
       {/* ── SVG grain filter ── */}
       <svg style={{ position: "absolute", width: 0, height: 0 }} aria-hidden="true">
@@ -254,6 +261,15 @@ export default function Home() {
           {showChat ? "Cerrar" : "Chat"}
         </button>
       </div>
+
+      {/* ── Escena principal (agente + voz); se desplaza al abrir sidebar ── */}
+      <div className="ziro-main-stage" style={{
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        width: "100%", flex: 1,
+        paddingBottom: 200,
+        boxSizing: "border-box",
+      }}>
 
       {/* ══════════════════════════════════════════
           Agent Portrait
@@ -440,9 +456,8 @@ export default function Home() {
       <div style={{
         color: "rgba(255,255,255,0.18)", fontSize: 10,
         letterSpacing: "0.22em", textTransform: "uppercase",
-        marginBottom: showChat ? 8 : 200,
+        marginBottom: 8,
         userSelect: "none",
-        transition: "margin-bottom 0.35s ease",
       }}>
         {state === "listening" ? "Suelta para enviar" : "Toca para hablar"}
       </div>
@@ -461,86 +476,57 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── Barra de chat v0 (21st) — siempre visible en la pantalla principal ── */}
-      {!showChat && (
-        <div
-          className="ziro-chat-dock"
-          style={{
-            position: "fixed",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 35,
-            padding: "12px 16px max(16px, env(safe-area-inset-bottom))",
-            maxWidth: 640,
-            margin: "0 auto",
-            width: "100%",
-            pointerEvents: "auto",
-            background: "linear-gradient(to top, rgba(5,5,8,0.97) 55%, transparent)",
-          }}
-        >
-          <p
+      </div>{/* /ziro-main-stage */}
+
+      {/* ── Dock: input + chips siempre visibles (no tapa al agente) ── */}
+      <div className="ziro-chat-dock">
+        <p className="ziro-chat-dock-title">¿En qué puedo asistirte?</p>
+        <ZiroChatInput
+          value={agentInput}
+          onChange={setAgentInput}
+          onSend={sendMessage}
+          disabled={state === "thinking"}
+          placeholder="Escribe un mensaje a Ziro…"
+          showSuggestions
+        />
+      </div>
+
+      {/* ── Sidebar derecho: solo historial de mensajes ── */}
+      <aside
+        className="ziro-chat-sidebar"
+        role="dialog"
+        aria-label="Historial de chat con Ziro"
+        aria-hidden={!showChat}
+      >
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "16px 16px 12px",
+          borderBottom: `1px solid ${c.primary}22`,
+          flexShrink: 0,
+        }}>
+          <span style={{ color: "#f1f5f9", fontSize: 14, fontWeight: 600 }}>Conversación</span>
+          <button
+            type="button"
+            onClick={() => setShowChat(false)}
+            aria-label="Cerrar panel de chat"
             style={{
-              textAlign: "center",
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.10)",
+              borderRadius: 8,
               color: "rgba(255,255,255,0.55)",
-              fontSize: 15,
-              fontWeight: 600,
-              marginBottom: 10,
+              cursor: "pointer",
+              padding: "6px 10px",
+              fontSize: 12,
             }}
           >
-            ¿En qué puedo asistirte?
-          </p>
-          <ZiroChatInput
-            value={agentInput}
-            onChange={setAgentInput}
-            onSend={sendMessage}
-            disabled={state === "thinking"}
-            placeholder="Escribe un mensaje a Ziro…"
-            showSuggestions
-          />
+            Cerrar
+          </button>
         </div>
-      )}
 
-      {/* ══════════════════════════════════════════
-          Chat panel — slide up from bottom
-      ══════════════════════════════════════════ */}
-      <div
-        role="dialog"
-        aria-label="Chat con Ziro"
-        aria-hidden={!showChat}
-        style={{
-          position: "fixed",
-          bottom: showChat ? 0 : "-100%",
-          left: 0, right: 0,
-          height: "55svh",
-          background: "rgba(6,6,10,0.95)",
-          backdropFilter: "blur(28px)",
-          WebkitBackdropFilter: "blur(28px)",
-          borderTop: `1px solid ${c.primary}24`,
-          borderRadius: "24px 24px 0 0",
-          display: "flex", flexDirection: "column",
-          transition: "bottom 0.38s cubic-bezier(0.32,0.72,0,1), border-color 0.6s ease",
-          zIndex: 40,
-          boxShadow: "0 -8px 48px rgba(0,0,0,0.55)",
-        }}
-      >
-        {/* Drag handle */}
-        <div style={{
-          width: 36, height: 4, borderRadius: 2,
-          background: "rgba(255,255,255,0.10)",
-          margin: "14px auto 6px",
-          flexShrink: 0,
-        }} />
-
-        {/* Messages */}
-        <div style={{
-          flex: 1, overflowY: "auto",
-          padding: "12px 16px",
-          display: "flex", flexDirection: "column", gap: 8,
-        }}>
+        <div className="ziro-chat-sidebar-messages">
           {messages.map((msg, i) => (
             <div key={i} style={{
-              maxWidth: "80%",
+              maxWidth: "92%",
               padding: "10px 14px",
               borderRadius: msg.sender === "bot" ? "16px 16px 16px 4px" : "16px 16px 4px 16px",
               alignSelf: msg.sender === "bot" ? "flex-start" : "flex-end",
@@ -549,7 +535,7 @@ export default function Home() {
                 : `linear-gradient(135deg, ${c.primary}, ${c.secondary})`,
               border: msg.sender === "bot" ? `1px solid rgba(255,255,255,0.08)` : "none",
               color: "#f1f5f9",
-              fontSize: 13.5, lineHeight: 1.6,
+              fontSize: 13, lineHeight: 1.55,
             }}
               dangerouslySetInnerHTML={{ __html: msg.text }}
             />
@@ -572,18 +558,7 @@ export default function Home() {
             </div>
           )}
         </div>
-
-        <div style={{ padding: "10px 14px 16px", flexShrink: 0 }}>
-          <ZiroChatInput
-            value={agentInput}
-            onChange={setAgentInput}
-            onSend={sendMessage}
-            disabled={state === "thinking"}
-            placeholder="Escribe un mensaje a Ziro…"
-            showSuggestions={messages.length <= 2}
-          />
-        </div>
-      </div>
+      </aside>
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
@@ -639,6 +614,86 @@ export default function Home() {
           *, *::before, *::after {
             animation-duration: 0.01ms !important;
             transition-duration: 0.01ms !important;
+          }
+        }
+
+        .ziro-main-stage {
+          transition: margin-right 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+        }
+        .ziro-chat-open .ziro-main-stage {
+          margin-right: var(--ziro-sidebar-w, 340px);
+        }
+
+        .ziro-chat-dock {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 35;
+          padding: 12px 16px max(16px, env(safe-area-inset-bottom));
+          max-width: 640px;
+          margin: 0 auto;
+          width: 100%;
+          pointer-events: auto;
+          background: linear-gradient(to top, rgba(5,5,8,0.97) 55%, transparent);
+          transition: right 0.38s cubic-bezier(0.32, 0.72, 0, 1),
+                      max-width 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+          box-sizing: border-box;
+        }
+        .ziro-chat-open .ziro-chat-dock {
+          right: var(--ziro-sidebar-w, 340px);
+          left: 0;
+          margin: 0;
+          max-width: min(640px, calc(100vw - var(--ziro-sidebar-w, 340px) - 24px));
+        }
+        .ziro-chat-dock-title {
+          text-align: center;
+          color: rgba(255,255,255,0.55);
+          font-size: 15px;
+          font-weight: 600;
+          margin-bottom: 10px;
+        }
+
+        .ziro-chat-sidebar {
+          position: fixed;
+          top: 0;
+          right: 0;
+          bottom: 0;
+          width: var(--ziro-sidebar-w, 340px);
+          z-index: 40;
+          display: flex;
+          flex-direction: column;
+          background: rgba(6, 6, 10, 0.96);
+          backdrop-filter: blur(28px);
+          -webkit-backdrop-filter: blur(28px);
+          border-left: 1px solid rgba(139, 92, 246, 0.18);
+          box-shadow: -8px 0 40px rgba(0, 0, 0, 0.45);
+          transform: translateX(100%);
+          transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1),
+                      border-color 0.6s ease;
+          pointer-events: none;
+        }
+        .ziro-chat-open .ziro-chat-sidebar {
+          transform: translateX(0);
+          pointer-events: auto;
+        }
+        .ziro-chat-sidebar-messages {
+          flex: 1;
+          overflow-y: auto;
+          padding: 12px 14px 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 8;
+        }
+
+        @media (max-width: 720px) {
+          .ziro-layout.ziro-chat-open {
+            --ziro-sidebar-w: min(88vw, 300px);
+          }
+          .ziro-chat-open .ziro-chat-dock {
+            max-width: calc(100vw - var(--ziro-sidebar-w) - 16px);
+            padding-left: 10px;
+            padding-right: 10px;
           }
         }
       `}</style>
