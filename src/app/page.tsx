@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import NeuralBackground from "@/components/ui/flow-field-background";
-import { InputBar } from "@/components/ui/input-bar";
+import { AgentChat, type AgentMessage } from "@/components/ui/agent-chat";
 
 type AgentState = "idle" | "listening" | "thinking" | "speaking";
 
@@ -25,19 +25,23 @@ export default function Home() {
   const [messages, setMessages] = useState<{ text: string; sender: "user" | "bot" }[]>([
     { text: "Enlace establecido. Soy Ziro.<br/>¿En qué puedo asistirte?", sender: "bot" },
   ]);
-  const [input, setInput]           = useState("");
   const [state, setState]           = useState<AgentState>("idle");
   const [showChat, setShowChat]     = useState(false);
   const [transcript, setTranscript] = useState("");
   const [lastReply, setLastReply]   = useState("");
   const [micError, setMicError]     = useState("");
-  const messagesEndRef              = useRef<HTMLDivElement>(null);
   const recogRef                    = useRef<any>(null);
   const speakTimerRef               = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  // Convert messages to AgentMessage format for AgentChat
+  const agentMessages = useMemo<AgentMessage[]>(() =>
+    messages.map((m, i) => ({
+      id: String(i),
+      role: m.sender === "user" ? "user" as const : "assistant" as const,
+      parts: [{ type: "text" as const, text: m.text.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim() }],
+    })),
+    [messages]
+  );
 
   const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&[a-z]+;/g, " ").trim();
 
@@ -66,7 +70,6 @@ export default function Home() {
     if (!trimmed || state === "thinking") return;
     setTranscript("");
     setMessages(prev => [...prev, { text: trimmed, sender: "user" }]);
-    setInput("");
     setState("thinking");
 
     try {
@@ -494,60 +497,13 @@ export default function Home() {
           flexShrink: 0,
         }} />
 
-        {/* Messages */}
-        <div style={{
-          flex: 1, overflowY: "auto",
-          padding: "8px 20px 12px",
-          display: "flex", flexDirection: "column", gap: 10,
-        }}>
-          {messages.map((msg, i) => (
-            <div key={i} style={{
-              maxWidth: "78%",
-              padding: "10px 16px",
-              borderRadius: msg.sender === "bot" ? "16px 16px 16px 4px" : "16px 16px 4px 16px",
-              alignSelf: msg.sender === "bot" ? "flex-start" : "flex-end",
-              background: msg.sender === "bot"
-                ? `${c.primary}13`
-                : `linear-gradient(135deg, ${c.primary}, ${c.secondary})`,
-              border: msg.sender === "bot" ? `1px solid ${c.primary}22` : "none",
-              color: "#f8fafc",
-              fontSize: 14, lineHeight: 1.55,
-              transition: "background 0.6s ease, border-color 0.6s ease",
-            }}
-              dangerouslySetInnerHTML={{ __html: msg.text }}
-            />
-          ))}
-          {state === "thinking" && (
-            <div style={{
-              alignSelf: "flex-start",
-              background: `${c.primary}13`,
-              border: `1px solid ${c.primary}22`,
-              borderRadius: "16px 16px 16px 4px",
-              padding: "12px 16px",
-              display: "flex", gap: 5, alignItems: "center",
-            }} aria-label="Ziro está procesando...">
-              {[0, 0.2, 0.4].map((d, i) => (
-                <div key={i} aria-hidden="true" style={{
-                  width: 7, height: 7, background: c.primary, borderRadius: "50%",
-                  animation: `bounce 1.2s ease-in-out ${d}s infinite`,
-                }} />
-              ))}
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Text input row — InputBar 21st.dev */}
-        <div style={{ paddingTop: 8, flexShrink: 0 }}>
-          <InputBar
-            value={input}
-            onChange={setInput}
-            onSend={(msg: { role: "user"; content: string }) => sendMessage(msg.content)}
-            status={state === "thinking" ? "streaming" : "ready"}
-            placeholder="Escribe un mensaje..."
-            disabled={state === "thinking"}
-          />
-        </div>
+        {/* AgentChat — messages + input from 21st.dev */}
+        <AgentChat
+          messages={agentMessages}
+          onSend={(msg) => sendMessage(msg.content)}
+          status={state === "thinking" ? "streaming" : "ready"}
+          className="flex-1 min-h-0"
+        />
       </div>
 
       <style>{`
@@ -594,14 +550,7 @@ export default function Home() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.28); border-radius: 2px; }
 
-        #chat-input::placeholder { color: rgba(255,255,255,0.20); }
-        #chat-input:focus {
-          border-color: rgba(139,92,246,0.40) !important;
-          box-shadow: 0 0 0 3px rgba(139,92,246,0.10);
-        }
-        #chat-input:disabled { opacity: 0.45; cursor: not-allowed; }
-
-        [role="button"]:focus-visible,
+[role="button"]:focus-visible,
         button:focus-visible {
           outline: 2px solid rgba(139,92,246,0.7);
           outline-offset: 3px;
