@@ -81,12 +81,17 @@ function buildScheduledPrompt(instruction: string): string {
     if (isAiNewsBriefing(instruction)) {
         return (
             base +
-            'BRIEFING NOTICIAS IA (OBLIGATORIO):\n' +
-            '1) Llama web_search UNA vez (la consulta ya filtra medios en español: Xataka, Hipertextual, Genbeta, El País, etc.).\n' +
-            '2) Resume 3 noticias en ESPAÑOL con este formato por cada una:\n' +
-            '   • **Titular** — por qué importa (1 frase) — 🔗 URL\n' +
-            '3) SOLO fuentes en español de la búsqueda. PROHIBIDO citar medios en inglés.\n' +
-            '4) PROHIBIDO inventar noticias. PROHIBIDO responder solo en inglés.\n' +
+            'BRIEFING NOTICIAS IA — 2 noticias de calidad (OBLIGATORIO):\n' +
+            '1) web_search query 1: "nuevas herramientas IA lanzamiento desarrolladores software site:xataka.com OR site:hipertextual.com OR site:genbeta.com"\n' +
+            '2) web_search query 2: "noticias inteligencia artificial tecnología hoy site:xataka.com OR site:hipertextual.com OR site:genbeta.com"\n' +
+            '3) Elige la MEJOR noticia de cada búsqueda. Deben ser sobre TEMAS DISTINTOS (no misma empresa ni herramienta).\n' +
+            '   PRIORIZA: lanzamientos de herramientas, APIs, modelos, frameworks nuevos — antes que análisis o artículos de opinión.\n' +
+            '4) Formato de cada noticia (sin introducción, directo):\n' +
+            '   🔧 **Titular exacto**\n' +
+            '   • Qué es: una frase\n' +
+            '   • Por qué importa para devs: una frase\n' +
+            '   🔗 URL\n' +
+            '5) PROHIBIDO: inventar, citar fuentes en inglés, repetir la misma empresa en ambas noticias.\n' +
             'NO llames schedule_task, save_agent_task ni cancel_scheduled_task.'
         );
     }
