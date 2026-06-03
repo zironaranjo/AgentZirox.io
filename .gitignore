@@ -18,6 +18,7 @@ hermes-agent/
 jarvis/
 output/
 skills-lock.json
+scripts/notebooklm-auth-oneline.txt
 *.png
 *.mp4
 ziro-web*.png

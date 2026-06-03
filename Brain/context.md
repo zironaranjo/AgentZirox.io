@@ -1,5 +1,7 @@
 # 🧠 Ziro - System Architecture & Context
 
+> **Índice del agente:** [[00 - Agente Ziro]] · **VPS / limpieza:** [[limpieza-vps|Limpieza VPS]]
+
 > Última actualización: 2 de Mayo 2026
 
 ## 1. Project Overview
@@ -52,7 +54,7 @@ server.ts (Bootloader)
 | **Memoria fallback** | better-sqlite3 (SQLite local) — si Supabase no está configurado |
 | **LLM** | Groq / OpenRouter / Hermes (endpoint OpenAI-compatible) |
 | **Imágenes IA** | KIE.ai (API unificada jobs/createTask + jobs/recordInfo) |
-| **Deployment** | Dokploy + Dockerfile custom en VPS |
+| **Deployment** | Dokploy + Dockerfile custom en VPS — ver [[limpieza-vps]] |
 | **Build** | Dockerfile con Node 20-bullseye-slim |
 | **CI/CD** | Push a `main` → Deploy manual en Dokploy |
 
@@ -62,6 +64,7 @@ server.ts (Bootloader)
 ```
 AgentZirox.io/
 ├── Brain/                    → 📖 Documentación de arquitectura (este archivo)
+│   └── limpieza-vps.md       → Mantenimiento VPS / Dokploy / Docker ([[limpieza-vps]])
 ├── public/                   → Assets estáticos (avatar.png)
 ├── src/
 │   ├── app/                  → Next.js App Router

@@ -262,7 +262,7 @@ export default function Home() {
             width: "100%", height: "100%", borderRadius: "50%",
             overflow: "hidden", background: "#0f172a", position: "relative",
           }}>
-            <Image src="/zirox.png" alt="Ziro" fill style={{ objectFit: "cover", objectPosition: "top center" }} priority />
+            <Image src="/zirox-nobg.png" alt="Ziro" fill style={{ objectFit: "contain", objectPosition: "center" }} priority />
           </div>
         </div>
 
@@ -394,10 +394,10 @@ export default function Home() {
           }}
         >
           <Image
-            src="/zirox.png"
+            src="/zirox-nobg.png"
             alt="Ziro — Agente IA"
             fill
-            style={{ objectFit: "cover", objectPosition: "top center" }}
+            style={{ objectFit: "contain", objectPosition: "center bottom" }}
             priority
           />
           {/* State-reactive color wash */}
